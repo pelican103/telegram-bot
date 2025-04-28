@@ -125,6 +125,7 @@ const tutorSchema = new mongoose.Schema({
 
 const Tutor = mongoose.model('Tutor', tutorSchema);
 
+// Define Assignment Schema
 const assignmentSchema = new mongoose.Schema({
   title: String,
   description: String,
@@ -161,8 +162,7 @@ const assignmentSchema = new mongoose.Schema({
 
 const Assignment = mongoose.model('Assignment', assignmentSchema);
 
-
-// Create Telegram Bot
+// Create Express application
 const app = express();
 app.use(express.json());
 
@@ -184,6 +184,12 @@ app.get('/', (req, res) => {
   res.send('Bot service is running!');
 });
 
+// Store user sessions
+const userSessions = {};
+
+// Pagination settings
+const ITEMS_PER_PAGE = 5;
+
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   bot.sendMessage(chatId, 'Welcome! Please share your phone number using the button below.', {
@@ -193,8 +199,6 @@ bot.onText(/\/start/, (msg) => {
     },
   });
 });
-
-const userSessions = {};
 
 // Listen for contact share
 bot.on('contact', async (msg) => {
@@ -257,27 +261,6 @@ bot.on('contact', async (msg) => {
           ]
         }
       });
-    } else if (matchingTutor) {
-      // Store matched tutor info in session
-      userSessions[chatId] = {
-        tutorId: matchingTutor._id,
-        state: 'profile_verification'
-      };
-      
-      // Format the matched tutor profile nicely
-      const profileMessage = formatTutorProfile(matchingTutor);
-      
-      // Send profile with verification buttons
-      bot.sendMessage(chatId, profileMessage, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Yes, use this profile', callback_data: 'profile_confirm' }],
-            [{ text: 'No, I would like to edit this profile', callback_data: 'profile_edit' }],
-            [{ text: 'Back', callback_data: 'start' }]
-          ]
-        }
-      });
     } else {
       console.log(`No match found for ${contactNumber}`);
       bot.sendMessage(chatId, 'Sorry, we could not find your registration. Would you like to register as a tutor?', {
@@ -288,123 +271,6 @@ bot.on('contact', async (msg) => {
           ]
         }
       });
-    } 
-    function formatTutorProfile(tutor) {
-      let profile = `*Tutor Profile*\n\n`;
-      profile += `*Name:* ${tutor.fullName || 'Not provided'}\n`;
-      profile += `*Contact:* ${tutor.contactNumber || 'Not provided'}\n`;
-      profile += `*Email:* ${tutor.email || 'Not provided'}\n`;
-      profile += `*Age:* ${tutor.age || 'Not provided'}\n`;
-      profile += `*Gender:* ${tutor.gender || 'Not provided'}\n`;
-      profile += `*Experience:* ${tutor.yearsOfExperience || 'Not provided'} years\n`;
-      profile += `*Highest Education:* ${tutor.highestEducation || 'Not provided'}\n`;
-      profile += `*Current School:* ${tutor.currentSchool || 'Not provided'}\n\n`;
-      
-      // Add teaching levels if available in your schema
-      if (tutor.teachingLevels) {
-        profile += `*Teaching Levels:*\n`;
-        const levels = [];
-        
-        // Check Primary
-        if (tutor.teachingLevels.primary) {
-          const subjects = [];
-          if (tutor.teachingLevels.primary.english) subjects.push('English');
-          if (tutor.teachingLevels.primary.math) subjects.push('Math');
-          if (tutor.teachingLevels.primary.science) subjects.push('Science');
-          if (tutor.teachingLevels.primary.chinese) subjects.push('Chinese');
-          if (tutor.teachingLevels.primary.malay) subjects.push('Malay');
-          if (tutor.teachingLevels.primary.tamil) subjects.push('Tamil');
-          
-          if (subjects.length > 0) {
-            levels.push(`Primary: ${subjects.join(', ')}`);
-          }
-        }
-        
-        // Add other levels as needed based on your schema
-        
-        if (levels.length > 0) {
-          profile += levels.join('\n');
-        } else {
-          profile += 'None specified';
-        }
-        
-        profile += '\n\n';
-      }
-      
-      // Add hourly rates if available
-      if (tutor.hourlyRate) {
-        profile += `*Hourly Rates:*\n`;
-        if (tutor.hourlyRate.primary) profile += `Primary: $${tutor.hourlyRate.primary}\n`;
-        if (tutor.hourlyRate.secondary) profile += `Secondary: $${tutor.hourlyRate.secondary}\n`;
-        if (tutor.hourlyRate.jc) profile += `JC: $${tutor.hourlyRate.jc}\n`;
-        if (tutor.hourlyRate.international) profile += `International: $${tutor.hourlyRate.international}\n`;
-        profile += '\n';
-      }
-      
-      profile += `Please verify if this information is correct.`;
-      
-      return profile;
-    }
-    
-    // Add button callback handler
-    bot.on('callback_query', async (callbackQuery) => {
-      const chatId = callbackQuery.message.chat.id;
-      const data = callbackQuery.data;
-      
-      // Acknowledge the button press
-      bot.answerCallbackQuery(callbackQuery.id);
-      
-      switch (data) {
-        case 'start':
-          // Return to start
-          bot.sendMessage(chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
-            reply_markup: {
-              keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-              one_time_keyboard: true,
-            },
-          });
-          break;
-          
-        case 'profile_confirm':
-          // User confirmed profile
-          if (userSessions[chatId] && userSessions[chatId].tutorId) {
-            userSessions[chatId].state = 'main_menu';
-            showMainMenu(chatId);
-          } else {
-            bot.sendMessage(chatId, 'Session expired. Please start again.', {
-              reply_markup: {
-                keyboard: [[{ text: 'Start Over', callback_data: 'start' }]],
-                one_time_keyboard: true,
-              },
-            });
-          }
-          break;
-          
-        case 'profile_edit':
-          // User wants to edit profile
-          bot.sendMessage(chatId, 'To edit your profile, please visit our website: https://www.lioncitytutors.com/tutor-login', {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'Go to Website', url: 'https://www.lioncitytutors.com/tutor-login' }],
-                [{ text: 'Back to Main Menu', callback_data: 'profile_confirm' }]
-              ]
-            }
-          });
-          break;
-      }
-    });
-    
-    // Show main menu
-    function showMainMenu(chatId) {
-      bot.sendMessage(chatId, 'Main Menu - What would you like to do?', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'View Available Assignments', callback_data: 'view_assignments' }],
-            [{ text: 'View My Applications', callback_data: 'view_applications' }],
-            [{ text: 'Update My Profile', callback_data: 'profile_edit' }]
-          ]
-        }
-      });
     }
   } catch (err) {
     console.error('Error finding tutor:', err);
@@ -412,6 +278,818 @@ bot.on('contact', async (msg) => {
   }
 });
 
+// Format tutor profile for display
+function formatTutorProfile(tutor) {
+  let profile = `*Tutor Profile*\n\n`;
+  profile += `*Name:* ${tutor.fullName || 'Not provided'}\n`;
+  profile += `*Contact:* ${tutor.contactNumber || 'Not provided'}\n`;
+  profile += `*Email:* ${tutor.email || 'Not provided'}\n`;
+  profile += `*Age:* ${tutor.age || 'Not provided'}\n`;
+  profile += `*Gender:* ${tutor.gender || 'Not provided'}\n`;
+  profile += `*Experience:* ${tutor.yearsOfExperience || 'Not provided'} years\n`;
+  profile += `*Highest Education:* ${tutor.highestEducation || 'Not provided'}\n`;
+  profile += `*Current School:* ${tutor.currentSchool || 'Not provided'}\n\n`;
+  
+  // Add teaching levels if available in your schema
+  if (tutor.teachingLevels) {
+    profile += `*Teaching Levels:*\n`;
+    const levels = [];
+    
+    // Check Primary
+    if (tutor.teachingLevels.primary) {
+      const subjects = [];
+      if (tutor.teachingLevels.primary.english) subjects.push('English');
+      if (tutor.teachingLevels.primary.math) subjects.push('Math');
+      if (tutor.teachingLevels.primary.science) subjects.push('Science');
+      if (tutor.teachingLevels.primary.chinese) subjects.push('Chinese');
+      if (tutor.teachingLevels.primary.malay) subjects.push('Malay');
+      if (tutor.teachingLevels.primary.tamil) subjects.push('Tamil');
+      
+      if (subjects.length > 0) {
+        levels.push(`Primary: ${subjects.join(', ')}`);
+      }
+    }
+    
+    // Check Secondary
+    if (tutor.teachingLevels.secondary) {
+      const subjects = [];
+      if (tutor.teachingLevels.secondary.english) subjects.push('English');
+      if (tutor.teachingLevels.secondary.math) subjects.push('Math');
+      if (tutor.teachingLevels.secondary.aMath) subjects.push('A Math');
+      if (tutor.teachingLevels.secondary.eMath) subjects.push('E Math');
+      if (tutor.teachingLevels.secondary.physics) subjects.push('Physics');
+      if (tutor.teachingLevels.secondary.chemistry) subjects.push('Chemistry');
+      if (tutor.teachingLevels.secondary.biology) subjects.push('Biology');
+      if (tutor.teachingLevels.secondary.science) subjects.push('Science');
+      if (tutor.teachingLevels.secondary.history) subjects.push('History');
+      if (tutor.teachingLevels.secondary.geography) subjects.push('Geography');
+      if (tutor.teachingLevels.secondary.literature) subjects.push('Literature');
+      if (tutor.teachingLevels.secondary.chinese) subjects.push('Chinese');
+      if (tutor.teachingLevels.secondary.malay) subjects.push('Malay');
+      if (tutor.teachingLevels.secondary.tamil) subjects.push('Tamil');
+      
+      if (subjects.length > 0) {
+        levels.push(`Secondary: ${subjects.join(', ')}`);
+      }
+    }
+    
+    // Check JC
+    if (tutor.teachingLevels.jc) {
+      const subjects = [];
+      if (tutor.teachingLevels.jc.generalPaper) subjects.push('General Paper');
+      if (tutor.teachingLevels.jc.h1Math) subjects.push('H1 Math');
+      if (tutor.teachingLevels.jc.h2Math) subjects.push('H2 Math');
+      if (tutor.teachingLevels.jc.h1Physics) subjects.push('H1 Physics');
+      if (tutor.teachingLevels.jc.h2Physics) subjects.push('H2 Physics');
+      if (tutor.teachingLevels.jc.h1Chemistry) subjects.push('H1 Chemistry');
+      if (tutor.teachingLevels.jc.h2Chemistry) subjects.push('H2 Chemistry');
+      if (tutor.teachingLevels.jc.h1Biology) subjects.push('H1 Biology');
+      if (tutor.teachingLevels.jc.h2Biology) subjects.push('H2 Biology');
+      if (tutor.teachingLevels.jc.h1Economics) subjects.push('H1 Economics');
+      if (tutor.teachingLevels.jc.h2Economics) subjects.push('H2 Economics');
+      if (tutor.teachingLevels.jc.h1History) subjects.push('H1 History');
+      if (tutor.teachingLevels.jc.h2History) subjects.push('H2 History');
+      
+      if (subjects.length > 0) {
+        levels.push(`JC: ${subjects.join(', ')}`);
+      }
+    }
+    
+    // Check International
+    if (tutor.teachingLevels.international) {
+      const programs = [];
+      if (tutor.teachingLevels.international.ib) programs.push('IB');
+      if (tutor.teachingLevels.international.igcse) programs.push('IGCSE');
+      if (tutor.teachingLevels.international.ielts) programs.push('IELTS');
+      if (tutor.teachingLevels.international.toefl) programs.push('TOEFL');
+      
+      if (programs.length > 0) {
+        levels.push(`International: ${programs.join(', ')}`);
+      }
+    }
+    
+    if (levels.length > 0) {
+      profile += levels.join('\n');
+    } else {
+      profile += 'None specified';
+    }
+    
+    profile += '\n\n';
+  }
+  
+  // Add hourly rates if available
+  if (tutor.hourlyRate) {
+    profile += `*Hourly Rates:*\n`;
+    if (tutor.hourlyRate.primary) profile += `Primary: $${tutor.hourlyRate.primary}\n`;
+    if (tutor.hourlyRate.secondary) profile += `Secondary: $${tutor.hourlyRate.secondary}\n`;
+    if (tutor.hourlyRate.jc) profile += `JC: $${tutor.hourlyRate.jc}\n`;
+    if (tutor.hourlyRate.international) profile += `International: $${tutor.hourlyRate.international}\n`;
+    profile += '\n';
+  }
+  
+  profile += `Please verify if this information is correct.`;
+  
+  return profile;
+}
+
+// Format assignment for display
+function formatAssignment(assignment) {
+  let msg = `*Assignment: ${assignment.title}*\n\n`;
+  msg += `*Level:* ${assignment.level}\n`;
+  msg += `*Subject:* ${assignment.subject}\n`;
+  msg += `*Location:* ${assignment.location}\n`;
+  msg += `*Rate:* ${assignment.rate}\n`;
+  msg += `*Frequency:* ${assignment.frequency}\n`;
+  msg += `*Start Date:* ${assignment.startDate}\n\n`;
+  msg += `*Description:* ${assignment.description}\n\n`;
+  
+  if (assignment.requirements) {
+    msg += `*Requirements:* ${assignment.requirements}\n\n`;
+  }
+  
+  msg += `*Status:* ${assignment.status}`;
+  
+  return msg;
+}
+
+// Show main menu
+function showMainMenu(chatId) {
+  bot.sendMessage(chatId, 'Main Menu - What would you like to do?', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: 'View Available Assignments', callback_data: 'view_assignments' }],
+        [{ text: 'View My Applications', callback_data: 'view_applications' }],
+        [{ text: 'Update My Profile', callback_data: 'profile_edit' }]
+      ]
+    }
+  });
+}
+
+// Handle pagination for assignments
+async function showAssignments(chatId, page = 1, filter = 'open') {
+  try {
+    // Default filter is 'open' assignments
+    const query = filter === 'open' ? { status: 'Open' } : {};
+    
+    // Count total assignments for pagination
+    const totalAssignments = await Assignment.countDocuments(query);
+    const totalPages = Math.ceil(totalAssignments / ITEMS_PER_PAGE) || 1;
+    
+    // Validate current page
+    page = Math.max(1, Math.min(page, totalPages));
+    
+    // Get assignments for current page
+    const assignments = await Assignment.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * ITEMS_PER_PAGE)
+      .limit(ITEMS_PER_PAGE);
+    
+    if (assignments.length === 0) {
+      return bot.sendMessage(chatId, 'No assignments available at the moment.', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+          ]
+        }
+      });
+    }
+    
+    // Send message for each assignment
+    bot.sendMessage(chatId, `Showing assignments ${(page - 1) * ITEMS_PER_PAGE + 1} to ${Math.min(page * ITEMS_PER_PAGE, totalAssignments)} of ${totalAssignments}`);
+    
+    for (const assignment of assignments) {
+      const msg = formatAssignment(assignment);
+      
+      // Check if user has already applied
+      const hasApplied = userSessions[chatId] && 
+        assignment.applicants.some(applicant => 
+          applicant.tutorId.toString() === userSessions[chatId].tutorId.toString());
+      
+      const keyboard = [
+        ...(assignment.status === 'Open' && !hasApplied ? [[{ text: 'Apply', callback_data: `apply_${assignment._id}` }]] : []),
+        ...(hasApplied ? [[{ text: 'Already Applied', callback_data: `view_application_${assignment._id}` }]] : [])
+      ];
+      
+      await bot.sendMessage(chatId, msg, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: keyboard
+        }
+      });
+    }
+    
+    // Add pagination controls
+    const paginationKeyboard = [];
+    
+    // Previous page button if not on first page
+    if (page > 1) {
+      paginationKeyboard.push({ text: '◀️ Previous', callback_data: `assignments_page_${page - 1}` });
+    }
+    
+    // Next page button if not on last page
+    if (page < totalPages) {
+      paginationKeyboard.push({ text: 'Next ▶️', callback_data: `assignments_page_${page + 1}` });
+    }
+    
+    // Add navigation row
+    await bot.sendMessage(chatId, `Page ${page} of ${totalPages}`, {
+      reply_markup: {
+        inline_keyboard: [
+          paginationKeyboard,
+          [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+        ]
+      }
+    });
+  } catch (err) {
+    console.error('Error showing assignments:', err);
+    bot.sendMessage(chatId, 'There was an error retrieving assignments. Please try again later.');
+  }
+}
+
+// Handle pagination for tutor's applications
+async function showApplications(chatId, page = 1) {
+  try {
+    if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
+      return bot.sendMessage(chatId, 'Your session has expired. Please start again.', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Start Over', callback_data: 'start' }]
+          ]
+        }
+      });
+    }
+    
+    const tutorId = userSessions[chatId].tutorId;
+    
+    // Find assignments where the tutor has applied
+    const assignments = await Assignment.find({ 
+      'applicants.tutorId': tutorId 
+    }).sort({ createdAt: -1 });
+    
+    if (assignments.length === 0) {
+      return bot.sendMessage(chatId, 'You haven\'t applied to any assignments yet.', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'View Available Assignments', callback_data: 'view_assignments' }],
+            [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+          ]
+        }
+      });
+    }
+    
+    // Calculate pagination
+    const totalApplications = assignments.length;
+    const totalPages = Math.ceil(totalApplications / ITEMS_PER_PAGE) || 1;
+    
+    // Validate current page
+    page = Math.max(1, Math.min(page, totalPages));
+    
+    // Get slice for current page
+    const pageAssignments = assignments.slice(
+      (page - 1) * ITEMS_PER_PAGE,
+      page * ITEMS_PER_PAGE
+    );
+    
+    // Send message for each application
+    bot.sendMessage(chatId, `Showing your applications ${(page - 1) * ITEMS_PER_PAGE + 1} to ${Math.min(page * ITEMS_PER_PAGE, totalApplications)} of ${totalApplications}`);
+    
+    for (const assignment of pageAssignments) {
+      // Find the tutor's application
+      const application = assignment.applicants.find(
+        app => app.tutorId.toString() === tutorId.toString()
+      );
+      
+      // Format assignment details with application status
+      let msg = formatAssignment(assignment);
+      msg += `\n\n*Your Application Status:* ${application.status}`;
+      msg += `\n*Applied on:* ${application.appliedAt.toLocaleDateString()}`;
+      
+      await bot.sendMessage(chatId, msg, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'View Details', callback_data: `view_application_${assignment._id}` }],
+            ...(application.status === 'Pending' ? [[{ text: 'Withdraw Application', callback_data: `withdraw_${assignment._id}` }]] : [])
+          ]
+        }
+      });
+    }
+    
+    // Add pagination controls
+    const paginationKeyboard = [];
+    
+    // Previous page button if not on first page
+    if (page > 1) {
+      paginationKeyboard.push({ text: '◀️ Previous', callback_data: `applications_page_${page - 1}` });
+    }
+    
+    // Next page button if not on last page
+    if (page < totalPages) {
+      paginationKeyboard.push({ text: 'Next ▶️', callback_data: `applications_page_${page + 1}` });
+    }
+    
+    // Add navigation row
+    await bot.sendMessage(chatId, `Page ${page} of ${totalPages}`, {
+      reply_markup: {
+        inline_keyboard: [
+          paginationKeyboard,
+          [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+        ]
+      }
+    });
+  } catch (err) {
+    console.error('Error showing applications:', err);
+    bot.sendMessage(chatId, 'There was an error retrieving your applications. Please try again later.');
+  }
+}
+
+// Handle callback queries
+bot.on('callback_query', async (callbackQuery) => {
+  const chatId = callbackQuery.message.chat.id;
+  const data = callbackQuery.data;
+  
+  // Acknowledge the button press
+  bot.answerCallbackQuery(callbackQuery.id);
+  
+  try {
+    // Extract action and parameters
+    if (data === 'start') {
+      // Return to start
+      bot.sendMessage(chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
+        reply_markup: {
+          keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
+          one_time_keyboard: true,
+        },
+      });
+    } 
+    else if (data === 'profile_confirm') {
+      // User confirmed profile
+      if (userSessions[chatId] && userSessions[chatId].tutorId) {
+        userSessions[chatId].state = 'main_menu';
+        showMainMenu(chatId);
+      } else {
+        bot.sendMessage(chatId, 'Session expired. Please start again.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Start Over', callback_data: 'start' }]
+            ]
+          },
+        });
+      }
+    } 
+    else if (data === 'profile_edit') {
+      // User wants to edit profile
+      bot.sendMessage(chatId, 'To edit your profile, please visit our website: https://www.lioncitytutors.com/tutor-login', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Go to Website', url: 'https://www.lioncitytutors.com/tutor-login' }],
+            [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+          ]
+        }
+      });
+    }
+    else if (data === 'main_menu') {
+      // Show main menu
+      showMainMenu(chatId);
+    }
+    else if (data === 'view_assignments') {
+      // Show available assignments
+      showAssignments(chatId, 1, 'open');
+    }
+    else if (data === 'view_applications') {
+      // Show user's applications
+      showApplications(chatId, 1);
+    }
+    else if (data.startsWith('assignments_page_')) {
+      // Handle assignment pagination
+      const page = parseInt(data.split('_').pop());
+      showAssignments(chatId, page, 'open');
+    }
+    else if (data.startsWith('applications_page_')) {
+      // Handle applications pagination
+      const page = parseInt(data.split('_').pop());
+      showApplications(chatId, page);
+    }
+    else if (data.startsWith('apply_')) {
+      // Handle assignment application
+      const assignmentId = data.split('_')[1];
+      
+      if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
+        return bot.sendMessage(chatId, 'Your session has expired. Please start again.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Start Over', callback_data: 'start' }]
+            ]
+          }
+        });
+      }
+      
+      // Find the assignment
+      const assignment = await Assignment.findById(assignmentId);
+      
+      if (!assignment) {
+        return bot.sendMessage(chatId, 'This assignment no longer exists.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Back to Assignments', callback_data: 'view_assignments' }]
+            ]
+          }
+        });
+      }
+      
+      // Check if assignment is still open
+      if (assignment.status !== 'Open') {
+        return bot.sendMessage(chatId, 'This assignment is no longer open for applications.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Back to Assignments', callback_data: 'view_assignments' }]
+            ]
+          }
+        });
+      }
+      
+      // Check if already applied
+      const tutorId = userSessions[chatId].tutorId;
+      const alreadyApplied = assignment.applicants.some(app => 
+        app.tutorId.toString() === tutorId.toString()
+      );
+      
+      if (alreadyApplied) {
+        return bot.sendMessage(chatId, 'You have already applied for this assignment.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'View My Applications', callback_data: 'view_applications' }],
+              [{ text: 'Back to Assignments', callback_data: 'view_assignments' }]
+            ]
+          }
+        });
+      }
+      
+      // Add tutor to applicants
+      assignment.applicants.push({
+        tutorId: tutorId,
+        status: 'Pending',
+        appliedAt: new Date()
+      });
+      
+      await assignment.save();
+      
+      bot.sendMessage(chatId, 'You have successfully applied for this assignment! We will notify you when there are updates.', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'View My Applications', callback_data: 'view_applications' }],
+            [{ text: 'Back to Assignments', callback_data: 'view_assignments' }],
+            [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+          ]
+        }
+      });
+    }
+    else if (data.startsWith('view_application_')) {
+      // View specific application
+      const assignmentId = data.split('_').pop();
+      
+      if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
+        return bot.sendMessage(chatId, 'Your session has expired. Please start again.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Start Over', callback_data: 'start' }]
+            ]
+          }
+        });
+      }
+      
+      // Find the assignment
+      const assignment = await Assignment.findById(assignmentId);
+      
+      if (!assignment) {
+        return bot.sendMessage(chatId, 'This assignment no longer exists.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Back to Applications', callback_data: 'view_applications' }]
+            ]
+          }
+        });
+      }
+      
+      // Find the tutor's application
+      const tutorId = userSessions[chatId].tutorId;
+      const application = assignment.applicants.find(app => 
+        app.tutorId.toString() === tutorId.toString()
+      );
+      
+      if (!application) {
+        return bot.sendMessage(chatId, 'You have not applied for this assignment.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Back to Applications', callback_data: 'view_applications' }]
+            ]
+          }
+        });
+      }
+      
+      // Format application details
+      // Format application details
+      let msg = formatAssignment(assignment);
+      msg += `\n\n*Your Application Status:* ${application.status}`;
+      msg += `\n*Applied on:* ${application.appliedAt.toLocaleDateString()}`;
+      
+      // Create appropriate buttons based on application status
+      const keyboard = [];
+      
+      if (application.status === 'Pending') {
+        keyboard.push([{ text: 'Withdraw Application', callback_data: `withdraw_${assignment._id}` }]);
+      }
+      
+      keyboard.push([{ text: 'Back to My Applications', callback_data: 'view_applications' }]);
+      keyboard.push([{ text: 'Back to Main Menu', callback_data: 'main_menu' }]);
+      
+      bot.sendMessage(chatId, msg, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: keyboard
+        }
+      });
+    }
+    else if (data.startsWith('withdraw_')) {
+      // Withdraw application
+      const assignmentId = data.split('_')[1];
+      
+      if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
+        return bot.sendMessage(chatId, 'Your session has expired. Please start again.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Start Over', callback_data: 'start' }]
+            ]
+          }
+        });
+      }
+      
+      // Confirm withdrawal
+      bot.sendMessage(chatId, 'Are you sure you want to withdraw your application? This action cannot be undone.', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Yes, withdraw my application', callback_data: `confirm_withdraw_${assignmentId}` }],
+            [{ text: 'No, keep my application', callback_data: `view_application_${assignmentId}` }]
+          ]
+        }
+      });
+    }
+    else if (data.startsWith('confirm_withdraw_')) {
+      // Confirm withdrawal
+      const assignmentId = data.split('_').pop();
+      
+      if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
+        return bot.sendMessage(chatId, 'Your session has expired. Please start again.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Start Over', callback_data: 'start' }]
+            ]
+          }
+        });
+      }
+      
+      const tutorId = userSessions[chatId].tutorId;
+      
+      // Update the assignment to remove the application
+      const result = await Assignment.updateOne(
+        { _id: assignmentId },
+        { $pull: { applicants: { tutorId: tutorId } } }
+      );
+      
+      if (result.modifiedCount > 0) {
+        bot.sendMessage(chatId, 'Your application has been withdrawn successfully.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'View Available Assignments', callback_data: 'view_assignments' }],
+              [{ text: 'View My Applications', callback_data: 'view_applications' }],
+              [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+            ]
+          }
+        });
+      } else {
+        bot.sendMessage(chatId, 'There was an error withdrawing your application. Please try again later.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Back to My Applications', callback_data: 'view_applications' }]
+            ]
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error handling callback query:', err);
+    bot.sendMessage(chatId, 'There was an error processing your request. Please try again later.');
+  }
+});
+
+// Function to create a public channel post with an 'Apply' button
+async function createAssignmentPost(channelId, assignment) {
+  try {
+    const formattedAssignment = formatAssignment(assignment);
+    
+    // Create the message with apply button
+    await bot.sendMessage(channelId, formattedAssignment, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: 'Apply for this Assignment', url: `https://t.me/${process.env.BOT_USERNAME}?start=apply_${assignment._id}` }]
+        ]
+      }
+    });
+    
+    console.log(`Posted assignment ${assignment._id} to channel ${channelId}`);
+  } catch (err) {
+    console.error('Error posting assignment to channel:', err);
+  }
+}
+
+// Handle "Apply" button clicks from channel
+bot.onText(/\/start apply_(.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const assignmentId = match[1];
+  
+  // Start the application process
+  bot.sendMessage(chatId, 'Welcome! To apply for this assignment, please share your phone number to verify your profile.', {
+    reply_markup: {
+      keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
+      one_time_keyboard: true,
+    },
+  });
+  
+  // Store the assignment ID in the session to redirect after verification
+  if (!userSessions[chatId]) {
+    userSessions[chatId] = {};
+  }
+  userSessions[chatId].pendingAssignmentId = assignmentId;
+});
+
+// Admin endpoint to post new assignments to channel
+app.post('/api/assignments', async (req, res) => {
+  try {
+    // Verify API key for security
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    // Create new assignment
+    const assignment = new Assignment(req.body);
+    const savedAssignment = await assignment.save();
+    
+    // Post to channel if CHANNEL_ID is configured
+    if (process.env.CHANNEL_ID) {
+      await createAssignmentPost(process.env.CHANNEL_ID, savedAssignment);
+    }
+    
+    res.status(201).json(savedAssignment);
+  } catch (err) {
+    console.error('Error creating assignment:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin endpoint to update assignment status
+app.put('/api/assignments/:id/status', async (req, res) => {
+  try {
+    // Verify API key for security
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    // Update assignment status
+    const assignment = await Assignment.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    );
+    
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+    
+    // Notify applicants of status change if needed
+    if (status === 'Closed' || status === 'Filled') {
+      // For each applicant, send a notification
+      for (const applicant of assignment.applicants) {
+        // Look up the tutor
+        const tutor = await Tutor.findById(applicant.tutorId);
+        if (tutor && tutor.telegramChatId) {
+          await bot.sendMessage(
+            tutor.telegramChatId,
+            `*Assignment Update*\n\nThe assignment "${assignment.title}" has been marked as ${status}.`,
+            { parse_mode: 'Markdown' }
+          );
+        }
+      }
+    }
+    
+    res.json(assignment);
+  } catch (err) {
+    console.error('Error updating assignment status:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin endpoint to update application status
+app.put('/api/assignments/:assignmentId/applications/:tutorId', async (req, res) => {
+  try {
+    // Verify API key for security
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { assignmentId, tutorId } = req.params;
+    const { status } = req.body;
+    
+    // Update application status
+    const assignment = await Assignment.findOneAndUpdate(
+      { 
+        _id: assignmentId,
+        'applicants.tutorId': tutorId
+      },
+      {
+        $set: { 'applicants.$.status': status }
+      },
+      { new: true }
+    );
+    
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment or application not found' });
+    }
+    
+    // Find the tutor to notify them
+    const tutor = await Tutor.findById(tutorId);
+    if (tutor && tutor.telegramChatId) {
+      await bot.sendMessage(
+        tutor.telegramChatId,
+        `*Application Update*\n\nYour application for "${assignment.title}" has been ${status.toLowerCase()}.`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+    
+    res.json(assignment);
+  } catch (err) {
+    console.error('Error updating application status:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Store Telegram Chat ID for tutors
+app.put('/api/tutors/:id/telegram', async (req, res) => {
+  try {
+    // Verify API key for security
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { id } = req.params;
+    const { telegramChatId } = req.body;
+    
+    // Update tutor with telegram chat id
+    const tutor = await Tutor.findByIdAndUpdate(
+      id,
+      { telegramChatId },
+      { new: true }
+    );
+    
+    if (!tutor) {
+      return res.status(404).json({ error: 'Tutor not found' });
+    }
+    
+    res.json(tutor);
+  } catch (err) {
+    console.error('Error updating tutor telegram ID:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Clean up expired sessions periodically
+setInterval(() => {
+  const now = Date.now();
+  const sessionTimeout = 24 * 60 * 60 * 1000; // 24 hours
+  
+  for (const chatId in userSessions) {
+    if (userSessions[chatId].lastActive && (now - userSessions[chatId].lastActive > sessionTimeout)) {
+      delete userSessions[chatId];
+    }
+  }
+}, 60 * 60 * 1000); // Check every hour
+
+// Update lastActive timestamp on each interaction
+bot.on('message', (msg) => {
+  const chatId = msg.chat.id;
+  if (userSessions[chatId]) {
+    userSessions[chatId].lastActive = Date.now();
+  }
+});
+
+// Start Express server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Bot server is running on port ${PORT}`);
