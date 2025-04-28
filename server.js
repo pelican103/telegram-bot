@@ -125,6 +125,43 @@ const tutorSchema = new mongoose.Schema({
 
 const Tutor = mongoose.model('Tutor', tutorSchema);
 
+const assignmentSchema = new mongoose.Schema({
+  title: String,
+  description: String,
+  level: String,
+  subject: String,
+  location: String,
+  rate: String,
+  frequency: String,
+  startDate: String,
+  requirements: String,
+  status: {
+    type: String,
+    default: 'Open'
+  },
+  applicants: [{
+    tutorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Tutor'
+    },
+    status: {
+      type: String,
+      default: 'Pending'
+    },
+    appliedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const Assignment = mongoose.model('Assignment', assignmentSchema);
+
+
 // Create Telegram Bot
 const app = express();
 app.use(express.json());
@@ -157,6 +194,7 @@ bot.onText(/\/start/, (msg) => {
   });
 });
 
+const userSessions = {};
 
 // Listen for contact share
 bot.on('contact', async (msg) => {
@@ -199,28 +237,174 @@ bot.on('contact', async (msg) => {
     });
 
     if (tutor) {
-      console.log(`Found match for ${contactNumber}: ${tutor.fullName}`);
-      bot.sendMessage(chatId, `Hi ${tutor.fullName}, you are registered! We have received your application.`);
-    } else {
-      // If still not found, try a more aggressive search that ignores all non-digits
-      const tutors = await Tutor.find({});
+      // Store tutor info in session
+      userSessions[chatId] = {
+        tutorId: tutor._id,
+        state: 'profile_verification'
+      };
       
-      // Manual comparison ignoring all formatting
-      const matchingTutor = tutors.find(t => {
-        const dbNumberDigits = t.contactNumber ? t.contactNumber.replace(/\D/g, '') : '';
-        
-        // Check if normalized input contains the db number or vice versa
-        return dbNumberDigits.includes(normalizedInput) || 
-               normalizedInput.includes(dbNumberDigits);
+      // Format the tutor profile nicely
+      const profileMessage = formatTutorProfile(tutor);
+      
+      // Send profile with verification buttons
+      bot.sendMessage(chatId, profileMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Yes, use this profile', callback_data: 'profile_confirm' }],
+            [{ text: 'No, I would like to edit this profile', callback_data: 'profile_edit' }],
+            [{ text: 'Back', callback_data: 'start' }]
+          ]
+        }
       });
+    } else if (matchingTutor) {
+      // Store matched tutor info in session
+      userSessions[chatId] = {
+        tutorId: matchingTutor._id,
+        state: 'profile_verification'
+      };
       
-      if (matchingTutor) {
-        console.log(`Found match using manual comparison: ${matchingTutor.fullName}`);
-        bot.sendMessage(chatId, `Hi ${matchingTutor.fullName}, you are registered! We have received your application.`);
-      } else {
-        console.log(`No match found for ${contactNumber}`);
-        bot.sendMessage(chatId, `Sorry, we could not find your registration. Please register at https://www.lioncitytutors.com/register-tutor`);
+      // Format the matched tutor profile nicely
+      const profileMessage = formatTutorProfile(matchingTutor);
+      
+      // Send profile with verification buttons
+      bot.sendMessage(chatId, profileMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Yes, use this profile', callback_data: 'profile_confirm' }],
+            [{ text: 'No, I would like to edit this profile', callback_data: 'profile_edit' }],
+            [{ text: 'Back', callback_data: 'start' }]
+          ]
+        }
+      });
+    } else {
+      console.log(`No match found for ${contactNumber}`);
+      bot.sendMessage(chatId, 'Sorry, we could not find your registration. Would you like to register as a tutor?', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Register Now', url: 'https://www.lioncitytutors.com/register-tutor' }],
+            [{ text: 'Try Another Number', callback_data: 'start' }]
+          ]
+        }
+      });
+    } 
+    function formatTutorProfile(tutor) {
+      let profile = `*Tutor Profile*\n\n`;
+      profile += `*Name:* ${tutor.fullName || 'Not provided'}\n`;
+      profile += `*Contact:* ${tutor.contactNumber || 'Not provided'}\n`;
+      profile += `*Email:* ${tutor.email || 'Not provided'}\n`;
+      profile += `*Age:* ${tutor.age || 'Not provided'}\n`;
+      profile += `*Gender:* ${tutor.gender || 'Not provided'}\n`;
+      profile += `*Experience:* ${tutor.yearsOfExperience || 'Not provided'} years\n`;
+      profile += `*Highest Education:* ${tutor.highestEducation || 'Not provided'}\n`;
+      profile += `*Current School:* ${tutor.currentSchool || 'Not provided'}\n\n`;
+      
+      // Add teaching levels if available in your schema
+      if (tutor.teachingLevels) {
+        profile += `*Teaching Levels:*\n`;
+        const levels = [];
+        
+        // Check Primary
+        if (tutor.teachingLevels.primary) {
+          const subjects = [];
+          if (tutor.teachingLevels.primary.english) subjects.push('English');
+          if (tutor.teachingLevels.primary.math) subjects.push('Math');
+          if (tutor.teachingLevels.primary.science) subjects.push('Science');
+          if (tutor.teachingLevels.primary.chinese) subjects.push('Chinese');
+          if (tutor.teachingLevels.primary.malay) subjects.push('Malay');
+          if (tutor.teachingLevels.primary.tamil) subjects.push('Tamil');
+          
+          if (subjects.length > 0) {
+            levels.push(`Primary: ${subjects.join(', ')}`);
+          }
+        }
+        
+        // Add other levels as needed based on your schema
+        
+        if (levels.length > 0) {
+          profile += levels.join('\n');
+        } else {
+          profile += 'None specified';
+        }
+        
+        profile += '\n\n';
       }
+      
+      // Add hourly rates if available
+      if (tutor.hourlyRate) {
+        profile += `*Hourly Rates:*\n`;
+        if (tutor.hourlyRate.primary) profile += `Primary: $${tutor.hourlyRate.primary}\n`;
+        if (tutor.hourlyRate.secondary) profile += `Secondary: $${tutor.hourlyRate.secondary}\n`;
+        if (tutor.hourlyRate.jc) profile += `JC: $${tutor.hourlyRate.jc}\n`;
+        if (tutor.hourlyRate.international) profile += `International: $${tutor.hourlyRate.international}\n`;
+        profile += '\n';
+      }
+      
+      profile += `Please verify if this information is correct.`;
+      
+      return profile;
+    }
+    
+    // Add button callback handler
+    bot.on('callback_query', async (callbackQuery) => {
+      const chatId = callbackQuery.message.chat.id;
+      const data = callbackQuery.data;
+      
+      // Acknowledge the button press
+      bot.answerCallbackQuery(callbackQuery.id);
+      
+      switch (data) {
+        case 'start':
+          // Return to start
+          bot.sendMessage(chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
+            reply_markup: {
+              keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
+              one_time_keyboard: true,
+            },
+          });
+          break;
+          
+        case 'profile_confirm':
+          // User confirmed profile
+          if (userSessions[chatId] && userSessions[chatId].tutorId) {
+            userSessions[chatId].state = 'main_menu';
+            showMainMenu(chatId);
+          } else {
+            bot.sendMessage(chatId, 'Session expired. Please start again.', {
+              reply_markup: {
+                keyboard: [[{ text: 'Start Over', callback_data: 'start' }]],
+                one_time_keyboard: true,
+              },
+            });
+          }
+          break;
+          
+        case 'profile_edit':
+          // User wants to edit profile
+          bot.sendMessage(chatId, 'To edit your profile, please visit our website: https://www.lioncitytutors.com/tutor-login', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: 'Go to Website', url: 'https://www.lioncitytutors.com/tutor-login' }],
+                [{ text: 'Back to Main Menu', callback_data: 'profile_confirm' }]
+              ]
+            }
+          });
+          break;
+      }
+    });
+    
+    // Show main menu
+    function showMainMenu(chatId) {
+      bot.sendMessage(chatId, 'Main Menu - What would you like to do?', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'View Available Assignments', callback_data: 'view_assignments' }],
+            [{ text: 'View My Applications', callback_data: 'view_applications' }],
+            [{ text: 'Update My Profile', callback_data: 'profile_edit' }]
+          ]
+        }
+      });
     }
   } catch (err) {
     console.error('Error finding tutor:', err);
