@@ -2,6 +2,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const express = require('express');
+const ADMIN_USERS = process.env.ADMIN_USERS ? process.env.ADMIN_USERS.split(',') : [];
+const adminPostingSessions = {};
 
 dotenv.config();
 
@@ -902,6 +904,140 @@ async function createAssignmentPost(channelId, assignment) {
     console.error('Error posting assignment to channel:', err);
   }
 }
+
+bot.onText(/\/post_assignment/, (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id.toString();
+  
+  // Check if user is an admin
+  if (!ADMIN_USERS.includes(userId)) {
+    return bot.sendMessage(chatId, 'Sorry, only administrators can post assignments.');
+  }
+  
+  // Initialize posting session
+  adminPostingSessions[chatId] = {
+    state: 'title',
+    assignment: {}
+  };
+  
+  bot.sendMessage(chatId, 'Let\'s create a new assignment post.\n\nPlease enter the assignment title:');
+});
+
+// Handle assignment creation conversation flow
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+  
+  // Skip if this is a command or no active posting session
+  if (!text || text.startsWith('/') || !adminPostingSessions[chatId]) {
+    return;
+  }
+  
+  const session = adminPostingSessions[chatId];
+  
+  // Handle different states of the assignment creation flow
+  switch (session.state) {
+    case 'title':
+      session.assignment.title = text;
+      session.state = 'level';
+      bot.sendMessage(chatId, 'Great! Now enter the educational level (e.g. Primary 5, Secondary 3, JC1):');
+      break;
+      
+    case 'level':
+      session.assignment.level = text;
+      session.state = 'subject';
+      bot.sendMessage(chatId, 'Now enter the subject:');
+      break;
+      
+    case 'subject':
+      session.assignment.subject = text;
+      session.state = 'location';
+      bot.sendMessage(chatId, 'Enter the location:');
+      break;
+      
+    case 'location':
+      session.assignment.location = text;
+      session.state = 'rate';
+      bot.sendMessage(chatId, 'Enter the hourly rate:');
+      break;
+      
+    case 'rate':
+      session.assignment.rate = text;
+      session.state = 'frequency';
+      bot.sendMessage(chatId, 'Enter the lesson frequency (e.g. Once a week, Twice a week):');
+      break;
+      
+    case 'frequency':
+      session.assignment.frequency = text;
+      session.state = 'startDate';
+      bot.sendMessage(chatId, 'Enter the start date:');
+      break;
+      
+    case 'startDate':
+      session.assignment.startDate = text;
+      session.state = 'description';
+      bot.sendMessage(chatId, 'Enter a detailed description of the assignment:');
+      break;
+      
+    case 'description':
+      session.assignment.description = text;
+      session.state = 'requirements';
+      bot.sendMessage(chatId, 'Enter any specific requirements (or type "none" if there are none):');
+      break;
+      
+    case 'requirements':
+      if (text.toLowerCase() !== 'none') {
+        session.assignment.requirements = text;
+      }
+      session.state = 'confirmation';
+      
+      // Show preview of the assignment
+      const previewMsg = formatAssignment(session.assignment);
+      bot.sendMessage(chatId, `*Preview of Assignment:*\n\n${previewMsg}\n\nIs this correct? Type "yes" to post or "no" to cancel.`, {
+        parse_mode: 'Markdown'
+      });
+      break;
+      
+    case 'confirmation':
+      if (text.toLowerCase() === 'yes') {
+        try {
+          // Set default status
+          session.assignment.status = 'Open';
+          
+          // Save assignment to database
+          const newAssignment = new Assignment(session.assignment);
+          const savedAssignment = await newAssignment.save();
+          
+          // Post to channel
+          if (process.env.CHANNEL_ID) {
+            await createAssignmentPost(process.env.CHANNEL_ID, savedAssignment);
+            bot.sendMessage(chatId, 'Assignment has been posted to the channel successfully!');
+          } else {
+            bot.sendMessage(chatId, 'Assignment saved but not posted to channel: CHANNEL_ID not configured.');
+          }
+        } catch (err) {
+          console.error('Error saving assignment:', err);
+          bot.sendMessage(chatId, 'There was an error saving the assignment. Please try again later.');
+        }
+      } else {
+        bot.sendMessage(chatId, 'Assignment posting cancelled.');
+      }
+      
+      // Clear posting session
+      delete adminPostingSessions[chatId];
+      break;
+  }
+});
+
+// Add a command to cancel assignment posting
+bot.onText(/\/cancel_post/, (msg) => {
+  const chatId = msg.chat.id;
+  
+  if (adminPostingSessions[chatId]) {
+    delete adminPostingSessions[chatId];
+    bot.sendMessage(chatId, 'Assignment posting cancelled.');
+  }
+});
 
 // Handle "Apply" button clicks from channel
 bot.onText(/\/start apply_(.+)/, async (msg, match) => {
