@@ -1010,8 +1010,14 @@ bot.on('message', async (msg) => {
           
           // Post to channel
           if (process.env.CHANNEL_ID) {
-            await createAssignmentPost(process.env.CHANNEL_ID, savedAssignment);
-            bot.sendMessage(chatId, 'Assignment has been posted to the channel successfully!');
+            console.log(`Attempting to post to channel: ${process.env.CHANNEL_ID}`);
+            try {
+              await createAssignmentPost(process.env.CHANNEL_ID, savedAssignment);
+              bot.sendMessage(chatId, 'Assignment has been posted to the channel successfully!');
+            } catch (channelErr) {
+              console.error('Error posting to channel:', channelErr);
+              bot.sendMessage(chatId, `Error posting to channel: ${channelErr.message}`);
+            }
           } else {
             bot.sendMessage(chatId, 'Assignment saved but not posted to channel: CHANNEL_ID not configured.');
           }
