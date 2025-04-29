@@ -605,6 +605,227 @@ async function showApplications(chatId, page = 1) {
   }
 }
 
+// Admin command to view applications for a specific assignment
+bot.onText(/\/view_applications (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id.toString();
+  const assignmentId = match[1];
+  
+  // Check if user is an admin
+  if (!ADMIN_USERS.includes(userId)) {
+    return bot.sendMessage(chatId, 'Sorry, only administrators can view applications.');
+  }
+  
+  try {
+    // Find the assignment
+    const assignment = await Assignment.findById(assignmentId);
+    
+    if (!assignment) {
+      return bot.sendMessage(chatId, 'Assignment not found.');
+    }
+    
+    // Check if there are any applications
+    if (!assignment.applicants || assignment.applicants.length === 0) {
+      return bot.sendMessage(chatId, `No applications for assignment: ${assignment.title}`);
+    }
+    
+    // Send assignment details first
+    await bot.sendMessage(chatId, `*Applications for Assignment:* ${assignment.title}\n\n`, {
+      parse_mode: 'Markdown'
+    });
+    
+    // Fetch and send each applicant's details
+    for (const applicant of assignment.applicants) {
+      try {
+        const tutor = await Tutor.findById(applicant.tutorId);
+        
+        if (!tutor) {
+          await bot.sendMessage(chatId, `- Unknown Tutor (ID: ${applicant.tutorId})\n  Status: ${applicant.status}\n  Applied: ${applicant.appliedAt.toLocaleDateString()}`);
+          continue;
+        }
+        
+        // Format tutor info
+        let tutorInfo = `*Applicant:* ${tutor.fullName}\n`;
+        tutorInfo += `*Status:* ${applicant.status}\n`;
+        tutorInfo += `*Applied:* ${applicant.appliedAt.toLocaleDateString()}\n`;
+        tutorInfo += `*Contact:* ${tutor.contactNumber}\n`;
+        tutorInfo += `*Email:* ${tutor.email}\n`;
+        tutorInfo += `*Experience:* ${tutor.yearsOfExperience || 'Not specified'} years\n`;
+        tutorInfo += `*Education:* ${tutor.highestEducation || 'Not specified'}\n`;
+        
+        // Create action buttons for this applicant
+        const keyboard = [
+          [
+            { text: 'Accept', callback_data: `admin_accept_${assignment._id}_${tutor._id}` },
+            { text: 'Reject', callback_data: `admin_reject_${assignment._id}_${tutor._id}` }
+          ],
+          [{ text: 'View Full Profile', callback_data: `admin_view_tutor_${tutor._id}` }]
+        ];
+        
+        await bot.sendMessage(chatId, tutorInfo, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: keyboard
+          }
+        });
+      } catch (err) {
+        console.error(`Error processing applicant ${applicant.tutorId}:`, err);
+      }
+    }
+    
+    // Add a command to list available assignments
+    await bot.sendMessage(chatId, 'To view applications for another assignment, use /list_assignments');
+    
+  } catch (err) {
+    console.error('Error retrieving applications:', err);
+    bot.sendMessage(chatId, 'Error retrieving applications. Please try again later.');
+  }
+});
+
+// Command to list all assignments for admin
+bot.onText(/\/list_assignments/, async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id.toString();
+  
+  // Check if user is an admin
+  if (!ADMIN_USERS.includes(userId)) {
+    return bot.sendMessage(chatId, 'Sorry, only administrators can view assignments.');
+  }
+  
+  try {
+    // Get all assignments, sorted by creation date (newest first)
+    const assignments = await Assignment.find({})
+      .sort({ createdAt: -1 })
+      .limit(20); // Limit to 20 most recent assignments
+    
+    if (assignments.length === 0) {
+      return bot.sendMessage(chatId, 'No assignments found.');
+    }
+    
+    let message = '*Available Assignments:*\n\n';
+    
+    for (const assignment of assignments) {
+      // Count applicants
+      const applicantCount = assignment.applicants ? assignment.applicants.length : 0;
+      
+      message += `*ID:* ${assignment._id}\n`;
+      message += `*Title:* ${assignment.title}\n`;
+      message += `*Status:* ${assignment.status}\n`;
+      message += `*Applicants:* ${applicantCount}\n`;
+      message += `*Created:* ${assignment.createdAt.toLocaleDateString()}\n\n`;
+    }
+    
+    message += 'To view applications for a specific assignment, use:\n/view_applications [assignment_id]';
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown'
+    });
+    
+  } catch (err) {
+    console.error('Error listing assignments:', err);
+    bot.sendMessage(chatId, 'Error retrieving assignments. Please try again later.');
+  }
+});
+
+// Handle admin action buttons
+bot.on('callback_query', async (callbackQuery) => {
+  const data = callbackQuery.data;
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id.toString();
+  
+  // Check if this is an admin action
+  if (data.startsWith('admin_') && !ADMIN_USERS.includes(userId)) {
+    return bot.answerCallbackQuery(callbackQuery.id, 'Only administrators can perform this action.');
+  }
+  
+  // Process admin actions
+  if (data.startsWith('admin_accept_') || data.startsWith('admin_reject_')) {
+    const parts = data.split('_');
+    const action = parts[1]; // 'accept' or 'reject'
+    const assignmentId = parts[2];
+    const tutorId = parts[3];
+    
+    try {
+      // Update application status
+      const newStatus = action === 'accept' ? 'Accepted' : 'Rejected';
+      
+      const assignment = await Assignment.findOneAndUpdate(
+        { 
+          _id: assignmentId,
+          'applicants.tutorId': tutorId
+        },
+        {
+          $set: { 'applicants.$.status': newStatus }
+        },
+        { new: true }
+      );
+      
+      if (!assignment) {
+        return bot.answerCallbackQuery(callbackQuery.id, 'Assignment or application not found.');
+      }
+      
+      // Notify the tutor
+      const tutor = await Tutor.findById(tutorId);
+      if (tutor && tutor.telegramChatId) {
+        await bot.sendMessage(
+          tutor.telegramChatId,
+          `*Application Update*\n\nYour application for "${assignment.title}" has been ${newStatus.toLowerCase()}.`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+      
+      // Confirm to admin
+      bot.answerCallbackQuery(callbackQuery.id, `Application ${newStatus.toLowerCase()} successfully!`);
+      
+      // Update the message with new status
+      const currentMessage = callbackQuery.message.text;
+      const updatedMessage = currentMessage.replace(/\*Status:\* [^\n]+/, `*Status:* ${newStatus}`);
+      
+      await bot.editMessageText(updatedMessage, {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'View Full Profile', callback_data: `admin_view_tutor_${tutorId}` }]
+          ]
+        }
+      });
+      
+    } catch (err) {
+      console.error(`Error processing ${action} for application:`, err);
+      bot.answerCallbackQuery(callbackQuery.id, 'Error processing action. Please try again.');
+    }
+  }
+  else if (data.startsWith('admin_view_tutor_')) {
+    const tutorId = data.split('_').pop();
+    
+    try {
+      const tutor = await Tutor.findById(tutorId);
+      
+      if (!tutor) {
+        return bot.answerCallbackQuery(callbackQuery.id, 'Tutor not found.');
+      }
+      
+      // Format the tutor profile
+      const profileMessage = formatTutorProfile(tutor);
+      
+      // Send the full profile
+      await bot.sendMessage(chatId, profileMessage, {
+        parse_mode: 'Markdown'
+      });
+      
+      bot.answerCallbackQuery(callbackQuery.id);
+      
+    } catch (err) {
+      console.error('Error viewing tutor profile:', err);
+      bot.answerCallbackQuery(callbackQuery.id, 'Error retrieving tutor profile.');
+    }
+  }
+  
+  // Continue processing other callback queries...
+});
+
 // Handle callback queries
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
@@ -626,17 +847,79 @@ bot.on('callback_query', async (callbackQuery) => {
     } 
     else if (data === 'profile_confirm') {
       // User confirmed profile
-      if (userSessions[chatId] && userSessions[chatId].tutorId) {
-        userSessions[chatId].state = 'main_menu';
-        showMainMenu(chatId);
-      } else {
-        bot.sendMessage(chatId, 'Session expired. Please start again.', {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Start Over', callback_data: 'start' }]
-            ]
-          },
-        });
+      if (data === 'profile_confirm') {
+        // User confirmed profile
+        if (userSessions[chatId] && userSessions[chatId].tutorId) {
+          // Check if there's a pending assignment to apply for
+          if (userSessions[chatId].pendingAssignmentId) {
+            const assignmentId = userSessions[chatId].pendingAssignmentId;
+            const tutorId = userSessions[chatId].tutorId;
+            
+            // Find the assignment
+            const assignment = await Assignment.findById(assignmentId);
+            
+            if (!assignment) {
+              bot.sendMessage(chatId, 'Sorry, this assignment no longer exists.');
+              userSessions[chatId].state = 'main_menu';
+              showMainMenu(chatId);
+              return;
+            }
+            
+            // Check if assignment is still open
+            if (assignment.status !== 'Open') {
+              bot.sendMessage(chatId, 'Sorry, this assignment is no longer open for applications.');
+              userSessions[chatId].state = 'main_menu';
+              showMainMenu(chatId);
+              return;
+            }
+            
+            // Check if already applied
+            const alreadyApplied = assignment.applicants.some(app => 
+              app.tutorId.toString() === tutorId.toString()
+            );
+            
+            if (alreadyApplied) {
+              bot.sendMessage(chatId, 'You have already applied for this assignment.');
+              userSessions[chatId].state = 'main_menu';
+              showMainMenu(chatId);
+              return;
+            }
+            
+            // Add tutor to applicants
+            assignment.applicants.push({
+              tutorId: tutorId,
+              status: 'Pending',
+              appliedAt: new Date()
+            });
+            
+            await assignment.save();
+            
+            // Clear pending assignment
+            delete userSessions[chatId].pendingAssignmentId;
+            
+            bot.sendMessage(chatId, 'You have successfully applied for this assignment! We will notify you when there are updates.', {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: 'View My Applications', callback_data: 'view_applications' }],
+                  [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+                ]
+              }
+            });
+            
+          } else {
+            // No pending assignment, just go to main menu
+            userSessions[chatId].state = 'main_menu';
+            showMainMenu(chatId);
+          }
+        } else {
+          bot.sendMessage(chatId, 'Session expired. Please start again.', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: 'Start Over', callback_data: 'start' }]
+              ]
+            },
+          });
+        }
       }
     } 
     else if (data === 'profile_edit') {
