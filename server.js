@@ -159,7 +159,8 @@ const assignmentSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  channelMessageId: { type: Number }
 });
 
 const Assignment = mongoose.model('Assignment', assignmentSchema);
@@ -763,8 +764,9 @@ bot.on('callback_query', async (callbackQuery) => {
         // Update application status
         const newStatus = action === 'accept' ? 'Accepted' : 'Rejected';
         
+        // Find the assignment first
         const assignment = await Assignment.findById(assignmentId);
-    
+        
         if (!assignment) {
           return bot.answerCallbackQuery(callbackQuery.id, 'Assignment not found.');
         }
@@ -786,6 +788,12 @@ bot.on('callback_query', async (callbackQuery) => {
             assignmentId,
             { status: 'Closed' }
           );
+          
+          // Get the updated assignment to have the latest data
+          const updatedAssignment = await Assignment.findById(assignmentId);
+          
+          // Update the message in the channel to remove the Apply button
+          await updateChannelAssignmentMessage(updatedAssignment);
           
           console.log(`Assignment ${assignmentId} status changed to Closed after accepting applicant ${tutorId}`);
         }
@@ -1229,13 +1237,43 @@ bot.on('callback_query', async (callbackQuery) => {
   }
 });
 
-// Function to create a public channel post with an 'Apply' button
+async function updateChannelAssignmentMessage(assignment) {
+  try {
+    // We need to find the message ID in the channel
+    // You'll need to store message IDs when posting to the channel
+    // Add this field to your assignment schema
+    if (!assignment.channelMessageId) {
+      console.log(`No channel message ID found for assignment ${assignment._id}`);
+      return;
+    }
+    
+    const channelId = process.env.CHANNEL_ID;
+    const formattedAssignment = formatAssignment(assignment);
+    
+    // Update the message in the channel with closed status and no button
+    await bot.editMessageText(formattedAssignment, {
+      chat_id: channelId,
+      message_id: assignment.channelMessageId,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        // No buttons for closed assignments
+        inline_keyboard: []
+      }
+    });
+    
+    console.log(`Updated channel message for assignment ${assignment._id} to Closed status`);
+  } catch (err) {
+    console.error('Error updating channel message:', err);
+  }
+}
+
+// Now modify the createAssignmentPost function to store the message ID
 async function createAssignmentPost(channelId, assignment) {
   try {
     const formattedAssignment = formatAssignment(assignment);
     
     // Create the message with apply button
-    await bot.sendMessage(channelId, formattedAssignment, {
+    const sentMessage = await bot.sendMessage(channelId, formattedAssignment, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
@@ -1244,10 +1282,32 @@ async function createAssignmentPost(channelId, assignment) {
       }
     });
     
-    console.log(`Posted assignment ${assignment._id} to channel ${channelId}`);
+    // Store the message ID in the assignment document
+    assignment.channelMessageId = sentMessage.message_id;
+    await assignment.save();
+    
+    console.log(`Posted assignment ${assignment._id} to channel ${channelId} with message ID ${sentMessage.message_id}`);
   } catch (err) {
     console.error('Error posting assignment to channel:', err);
   }
+}
+
+// Finally, update your admin_accept handler to call the function to update the channel message
+// Add this code inside the if (action === 'accept') block in your admin_accept handler:
+
+if (action === 'accept') {
+  await Assignment.findByIdAndUpdate(
+    assignmentId,
+    { status: 'Closed' }
+  );
+  
+  // Get the updated assignment to have the latest data
+  const updatedAssignment = await Assignment.findById(assignmentId);
+  
+  // Update the message in the channel
+  await updateChannelAssignmentMessage(updatedAssignment);
+  
+  console.log(`Assignment ${assignmentId} status changed to Closed after accepting applicant ${tutorId}`);
 }
 
 bot.onText(/\/post_assignment/, (msg) => {
