@@ -1292,23 +1292,6 @@ async function createAssignmentPost(channelId, assignment) {
   }
 }
 
-// Finally, update your admin_accept handler to call the function to update the channel message
-// Add this code inside the if (action === 'accept') block in your admin_accept handler:
-
-if (action === 'accept') {
-  await Assignment.findByIdAndUpdate(
-    assignmentId,
-    { status: 'Closed' }
-  );
-  
-  // Get the updated assignment to have the latest data
-  const updatedAssignment = await Assignment.findById(assignmentId);
-  
-  // Update the message in the channel
-  await updateChannelAssignmentMessage(updatedAssignment);
-  
-  console.log(`Assignment ${assignmentId} status changed to Closed after accepting applicant ${tutorId}`);
-}
 
 bot.onText(/\/post_assignment/, (msg) => {
   const chatId = msg.chat.id;
