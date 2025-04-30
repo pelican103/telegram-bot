@@ -399,6 +399,19 @@ function formatTutorProfile(tutor) {
     if (tutor.hourlyRate.international) profile += `International: $${tutor.hourlyRate.international}\n`;
     profile += '\n';
   }
+  if (
+    tutor.introduction ||
+    tutor.teachingExperience ||
+    tutor.trackRecord ||
+    tutor.sellingPoints
+  ) {
+    profile += `*Tutor Profile:*\n`;
+    if (tutor.introduction) profile += `*Introduction:* ${tutor.introduction}\n`;
+    if (tutor.teachingExperience) profile += `*Teaching Experience:* ${tutor.teachingExperience}\n`;
+    if (tutor.trackRecord) profile += `*Track Record:* ${tutor.trackRecord}\n`;
+    if (tutor.sellingPoints) profile += `*Selling Points:* ${tutor.sellingPoints}\n`;
+    profile += '\n';
+  }
   
   profile += `Please verify if this information is correct.`;
   
@@ -994,15 +1007,14 @@ bot.on('callback_query', async (callbackQuery) => {
       }
     } 
     else if (data === 'profile_edit') {
-      // User wants to edit profile
-      bot.sendMessage(chatId, 'To edit your profile, please visit our website: https://www.lioncitytutors.com/register-tutor', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Go to Website', url: 'https://www.lioncitytutors.com/register-tutor' }],
-            [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
-          ]
-        }
-      });
+      if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
+        return bot.sendMessage(chatId, 'Session expired. Please start again.');
+      }
+    
+      userSessions[chatId].state = 'editing_profile';
+      userSessions[chatId].editStep = 'fullName';
+    
+      bot.sendMessage(chatId, 'Let\'s update your profile.\n\nWhat is your full name?');
     }
     else if (data === 'main_menu') {
       // Show main menu
@@ -1630,6 +1642,42 @@ bot.on('message', (msg) => {
   const chatId = msg.chat.id;
   if (userSessions[chatId]) {
     userSessions[chatId].lastActive = Date.now();
+  }
+});
+
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+
+  if (!userSessions[chatId] || userSessions[chatId].state !== 'editing_profile') return;
+
+  const tutorId = userSessions[chatId].tutorId;
+  const step = userSessions[chatId].editStep;
+
+  const nextSteps = {
+    fullName: 'age',
+    age: 'email',
+    email: 'gender',
+    gender: 'introduction',
+    introduction: null // finish here for now
+  };
+
+  try {
+    await Tutor.findByIdAndUpdate(tutorId, { [step]: text });
+
+    const nextStep = nextSteps[step];
+    if (nextStep) {
+      userSessions[chatId].editStep = nextStep;
+      bot.sendMessage(chatId, `Got it! What's your ${nextStep}?`);
+    } else {
+      delete userSessions[chatId].editStep;
+      userSessions[chatId].state = 'main_menu';
+      bot.sendMessage(chatId, 'Your profile has been updated successfully.');
+      showMainMenu(chatId);
+    }
+  } catch (err) {
+    console.error('Error updating tutor profile:', err);
+    bot.sendMessage(chatId, 'There was an error updating your profile. Please try again later.');
   }
 });
 
