@@ -763,33 +763,74 @@ bot.on('callback_query', async (callbackQuery) => {
         // Update application status
         const newStatus = action === 'accept' ? 'Accepted' : 'Rejected';
         
-        const assignment = await Assignment.findOneAndUpdate(
+        const assignment = await Assignment.findById(assignmentId);
+    
+        if (!assignment) {
+          return bot.answerCallbackQuery(callbackQuery.id, 'Assignment not found.');
+        }
+        
+        // Update the specific applicant's status
+        await Assignment.findOneAndUpdate(
           { 
             _id: assignmentId,
             'applicants.tutorId': tutorId
           },
           {
             $set: { 'applicants.$.status': newStatus }
-          },
-          { new: true }
+          }
         );
         
-        if (!assignment) {
-          return bot.answerCallbackQuery(callbackQuery.id, 'Assignment or application not found.');
+        // If action is 'accept', also update the assignment status to 'Closed'
+        if (action === 'accept') {
+          await Assignment.findByIdAndUpdate(
+            assignmentId,
+            { status: 'Closed' }
+          );
+          
+          console.log(`Assignment ${assignmentId} status changed to Closed after accepting applicant ${tutorId}`);
         }
         
-        // Notify the tutor
+        // Get the updated assignment
+        const updatedAssignment = await Assignment.findById(assignmentId);
+        
+        // Notify the accepted/rejected tutor
         const tutor = await Tutor.findById(tutorId);
         if (tutor && tutor.telegramChatId) {
           await bot.sendMessage(
             tutor.telegramChatId,
-            `*Application Update*\n\nYour application for "${assignment.title}" has been ${newStatus.toLowerCase()}.`,
+            `*Application Update*\n\nYour application for "${updatedAssignment.title}" has been ${newStatus.toLowerCase()}.`,
             { parse_mode: 'Markdown' }
           );
         }
         
+        // Notify all other pending applicants if assignment was accepted and closed
+        if (action === 'accept') {
+          // Notify all other applicants that the position has been filled
+          for (const applicant of updatedAssignment.applicants) {
+            // Skip the accepted applicant as they already got a notification
+            if (applicant.tutorId.toString() === tutorId) continue;
+            
+            // Only notify pending applicants
+            if (applicant.status === 'Pending') {
+              const pendingTutor = await Tutor.findById(applicant.tutorId);
+              if (pendingTutor && pendingTutor.telegramChatId) {
+                await bot.sendMessage(
+                  pendingTutor.telegramChatId,
+                  `*Assignment Update*\n\nThe assignment "${updatedAssignment.title}" has been filled and is no longer accepting applications.`,
+                  { parse_mode: 'Markdown' }
+                );
+              }
+            }
+          }
+        }
+        
         // Confirm to admin
-        bot.answerCallbackQuery(callbackQuery.id, `Application ${newStatus.toLowerCase()} successfully!`);
+        bot.answerCallbackQuery(
+          callbackQuery.id, 
+          action === 'accept' ? 
+            `Application accepted and assignment closed successfully!` : 
+            `Application rejected successfully!`
+        );
         
         // Update the message with new status
         const currentMessage = callbackQuery.message.text;
@@ -805,6 +846,15 @@ bot.on('callback_query', async (callbackQuery) => {
             ]
           }
         });
+        
+        // If we accepted an applicant, also update the admin with assignment status change
+        if (action === 'accept') {
+          await bot.sendMessage(
+            chatId,
+            `The assignment "${updatedAssignment.title}" has been marked as *Closed*. No more applications will be accepted.`,
+            { parse_mode: 'Markdown' }
+          );
+        }
         
       } catch (err) {
         console.error(`Error processing ${action} for application:`, err);
