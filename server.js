@@ -995,10 +995,10 @@ bot.on('callback_query', async (callbackQuery) => {
     } 
     else if (data === 'profile_edit') {
       // User wants to edit profile
-      bot.sendMessage(chatId, 'To edit your profile, please visit our website: https://www.lioncitytutors.com/tutor-login', {
+      bot.sendMessage(chatId, 'To edit your profile, please visit our website: https://www.lioncitytutors.com/register-tutor', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: 'Go to Website', url: 'https://www.lioncitytutors.com/tutor-login' }],
+            [{ text: 'Go to Website', url: 'https://www.lioncitytutors.com/register-tutor' }],
             [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
           ]
         }
