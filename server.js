@@ -827,6 +827,7 @@ bot.on('callback_query', async (callbackQuery) => {
 });
 
 // Handle callback queries
+// Handle callback queries
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
@@ -847,14 +848,13 @@ bot.on('callback_query', async (callbackQuery) => {
     } 
     else if (data === 'profile_confirm') {
       // User confirmed profile
-      if (data === 'profile_confirm') {
-        // User confirmed profile
-        if (userSessions[chatId] && userSessions[chatId].tutorId) {
-          // Check if there's a pending assignment to apply for
-          if (userSessions[chatId].pendingAssignmentId) {
-            const assignmentId = userSessions[chatId].pendingAssignmentId;
-            const tutorId = userSessions[chatId].tutorId;
-            
+      if (userSessions[chatId] && userSessions[chatId].tutorId) {
+        // Check if there's a pending assignment to apply for
+        if (userSessions[chatId].pendingAssignmentId) {
+          const assignmentId = userSessions[chatId].pendingAssignmentId;
+          const tutorId = userSessions[chatId].tutorId;
+          
+          try {
             // Find the assignment
             const assignment = await Assignment.findById(assignmentId);
             
@@ -905,21 +905,25 @@ bot.on('callback_query', async (callbackQuery) => {
                 ]
               }
             });
-            
-          } else {
-            // No pending assignment, just go to main menu
+          } catch (err) {
+            console.error('Error processing application:', err);
+            bot.sendMessage(chatId, 'There was an error processing your application. Please try again later.');
             userSessions[chatId].state = 'main_menu';
             showMainMenu(chatId);
           }
         } else {
-          bot.sendMessage(chatId, 'Session expired. Please start again.', {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'Start Over', callback_data: 'start' }]
-              ]
-            },
-          });
+          // No pending assignment, just go to main menu
+          userSessions[chatId].state = 'main_menu';
+          showMainMenu(chatId);
         }
+      } else {
+        bot.sendMessage(chatId, 'Session expired. Please start again.', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Start Over', callback_data: 'start' }]
+            ]
+          },
+        });
       }
     } 
     else if (data === 'profile_edit') {
