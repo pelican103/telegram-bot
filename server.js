@@ -208,6 +208,8 @@ bot.on('contact', async (msg) => {
   const contactNumber = msg.contact.phone_number;
   
   console.log(`Received phone number from Telegram: ${contactNumber}`);
+  console.log(`Current user session before processing: ${JSON.stringify(userSessions[chatId])}`);
+
 
   try {
     // Normalize the received phone number (remove all non-digits)
@@ -243,12 +245,20 @@ bot.on('contact', async (msg) => {
     });
 
     if (tutor) {
-      // Store tutor info in session
+      // Store tutor info in session, preserving pendingAssignmentId if it exists
+      const pendingAssignmentId = userSessions[chatId]?.pendingAssignmentId;
+      
       userSessions[chatId] = {
         tutorId: tutor._id,
         state: 'profile_verification'
       };
       
+      // Restore pendingAssignmentId if it was present
+      if (pendingAssignmentId) {
+        userSessions[chatId].pendingAssignmentId = pendingAssignmentId;
+      }
+      
+      console.log(`Session after tutor found: ${JSON.stringify(userSessions[chatId])}`);
       // Format the tutor profile nicely
       const profileMessage = formatTutorProfile(tutor);
       
