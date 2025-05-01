@@ -192,6 +192,126 @@ const userSessions = {};
 
 const getTick = (val) => val ? '✔️' : '❌';
 
+function initializeTeachingLevels(tutor) {
+  if (!tutor.teachingLevels) {
+    tutor.teachingLevels = {};
+  }
+  
+  const levels = {
+    primary: {
+      english: false,
+      math: false,
+      science: false,
+      chinese: false,
+      malay: false,
+      tamil: false
+    },
+    secondary: {
+      english: false,
+      math: false,
+      aMath: false,
+      eMath: false,
+      physics: false,
+      chemistry: false,
+      biology: false,
+      science: false,
+      history: false,
+      geography: false,
+      literature: false,
+      chinese: false,
+      malay: false,
+      tamil: false
+    },
+    jc: {
+      generalPaper: false,
+      h1Math: false,
+      h2Math: false,
+      h1Physics: false,
+      h2Physics: false,
+      h1Chemistry: false,
+      h2Chemistry: false,
+      h1Biology: false,
+      h2Biology: false,
+      h1Economics: false,
+      h2Economics: false,
+      h1History: false,
+      h2History: false
+    },
+    international: {
+      ib: false,
+      igcse: false,
+      ielts: false,
+      toefl: false
+    }
+  };
+
+  // Initialize any missing levels
+  for (const [level, subjects] of Object.entries(levels)) {
+    if (!tutor.teachingLevels[level]) {
+      tutor.teachingLevels[level] = {};
+    }
+    // Initialize any missing subjects
+    for (const [subject, defaultValue] of Object.entries(subjects)) {
+      if (tutor.teachingLevels[level][subject] === undefined) {
+        tutor.teachingLevels[level][subject] = defaultValue;
+      }
+    }
+  }
+}
+
+function getAvailabilityMenu(tutor) {
+  const timeSlots = {
+    weekdayMorning: 'Weekday Morning',
+    weekdayAfternoon: 'Weekday Afternoon',
+    weekdayEvening: 'Weekday Evening',
+    weekendMorning: 'Weekend Morning',
+    weekendAfternoon: 'Weekend Afternoon',
+    weekendEvening: 'Weekend Evening'
+  };
+
+  const keyboard = [];
+
+  for (const [key, label] of Object.entries(timeSlots)) {
+    const tick = getTick(tutor.availableTimeSlots[key]);
+    keyboard.push([{
+      text: `${label} ${tick}`,
+      callback_data: `toggle_availability_${key}`
+    }]);
+  }
+
+  keyboard.push([{ text: '⬅️ Back', callback_data: 'profile_edit' }]);
+
+  return {
+    text: '*Select your available time slots:*',
+    options: {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }
+  };
+}
+
+function getHourlyRateMenu(tutor) {
+  const keyboard = [
+    [{ text: 'Primary', callback_data: 'edit_hourlyRate_primary' }],
+    [{ text: 'Secondary', callback_data: 'edit_hourlyRate_secondary' }],
+    [{ text: 'JC', callback_data: 'edit_hourlyRate_jc' }],
+    [{ text: 'International', callback_data: 'edit_hourlyRate_international' }],
+    [{ text: '⬅️ Back', callback_data: 'profile_edit' }]
+  ];
+
+  return {
+    text: '*Select level to edit hourly rate:*',
+    options: {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }
+  };
+}
+
 function getTeachingLevelMenu(tutor, level) {
   const subjects = Object.keys(tutor.teachingLevels[level] || {});
   const keyboard = [];
@@ -965,8 +1085,11 @@ bot.on('callback_query', async (callbackQuery) => {
     else if (data.startsWith('edit_teachingLevel_')) {
       const level = data.split('_')[2];
       const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      // Initialize teaching levels if needed
+      initializeTeachingLevels(tutor);
+      
       const menu = getTeachingLevelMenu(tutor, level);
-
       bot.sendMessage(chatId, menu.text, menu.options);
     }
 
@@ -974,6 +1097,9 @@ bot.on('callback_query', async (callbackQuery) => {
     else if (data.startsWith('toggle_')) {
       const [, level, subject] = data.split('_');
       const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      // Initialize teaching levels if needed
+      initializeTeachingLevels(tutor);
 
       const currentValue = tutor.teachingLevels[level][subject];
       tutor.teachingLevels[level][subject] = !currentValue;
@@ -1101,6 +1227,10 @@ bot.on('callback_query', async (callbackQuery) => {
             [{ text: 'Teaching Levels', callback_data: 'edit_teachingLevels' }],
             [{ text: 'Hourly Rates', callback_data: 'edit_hourlyRate' }],
             [{ text: 'Availability', callback_data: 'edit_availableTimeSlots' }],
+            [{ text: 'Introduction', callback_data: 'edit_introduction' }],
+            [{ text: 'Teaching Experience', callback_data: 'edit_teachingExperience' }],
+            [{ text: 'Track Record', callback_data: 'edit_trackRecord' }],
+            [{ text: 'Selling Points', callback_data: 'edit_sellingPoints' }],
             [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
           ]
         }
@@ -1333,6 +1463,61 @@ bot.on('callback_query', async (callbackQuery) => {
           }
         });
       }
+    }
+    else if (data === 'edit_availableTimeSlots') {
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      if (!tutor.availableTimeSlots) {
+        tutor.availableTimeSlots = {
+          weekdayMorning: false,
+          weekdayAfternoon: false,
+          weekdayEvening: false,
+          weekendMorning: false,
+          weekendAfternoon: false,
+          weekendEvening: false
+        };
+      }
+      const menu = getAvailabilityMenu(tutor);
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('toggle_availability_')) {
+      const timeSlot = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      if (!tutor.availableTimeSlots) {
+        tutor.availableTimeSlots = {};
+      }
+      
+      const currentValue = tutor.availableTimeSlots[timeSlot] || false;
+      tutor.availableTimeSlots[timeSlot] = !currentValue;
+      await tutor.save();
+
+      const updatedMenu = getAvailabilityMenu(tutor);
+      bot.editMessageText(updatedMenu.text, {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id,
+        ...updatedMenu.options
+      });
+    }
+    else if (data === 'edit_hourlyRate') {
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      if (!tutor.hourlyRate) {
+        tutor.hourlyRate = {
+          primary: '',
+          secondary: '',
+          jc: '',
+          international: ''
+        };
+      }
+      const menu = getHourlyRateMenu(tutor);
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('edit_hourlyRate_')) {
+      const level = data.split('_')[2];
+      userSessions[chatId].state = 'editing_field';
+      userSessions[chatId].editField = `hourlyRate.${level}`;
+      bot.sendMessage(chatId, `Please enter the hourly rate for ${level.charAt(0).toUpperCase() + level.slice(1)}:`, {
+        parse_mode: 'Markdown'
+      });
     }
   } catch (err) {
     console.error('Error handling callback query:', err);
@@ -1744,12 +1929,30 @@ bot.on('message', async (msg) => {
   if (userSessions[chatId]?.state === 'editing_field') {
     const field = userSessions[chatId].editField;
     try {
-      await Tutor.findByIdAndUpdate(userSessions[chatId].tutorId, { [field]: text });
+      // Handle nested fields (like hourlyRate.primary)
+      if (field.includes('.')) {
+        const [parent, child] = field.split('.');
+        const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+        if (!tutor[parent]) {
+          tutor[parent] = {};
+        }
+        tutor[parent][child] = text;
+        await tutor.save();
+      } else {
+        await Tutor.findByIdAndUpdate(userSessions[chatId].tutorId, { [field]: text });
+      }
+      
       userSessions[chatId].state = 'main_menu';
       delete userSessions[chatId].editField;
 
-      bot.sendMessage(chatId, `✅ *${field}* has been updated successfully.`, {
-        parse_mode: 'Markdown'
+      bot.sendMessage(chatId, `✅ *${field.replace(/([A-Z])/g, ' $1').replace(/\./g, ' ').trim()}* has been updated successfully.`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Back to Profile Menu', callback_data: 'profile_edit' }],
+            [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+          ]
+        }
       });
     } catch (err) {
       console.error(`Error updating ${field}:`, err);
