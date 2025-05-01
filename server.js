@@ -327,9 +327,9 @@ function getTeachingLevelMenu(tutor, level) {
   keyboard.push([{ text: '⬅️ Back', callback_data: 'edit_teachingLevels' }]);
 
   return {
-    text: `*Select subjects for ${level.charAt(0).toUpperCase() + level.slice(1)}:*`,
+    text: `Select subjects for ${level.charAt(0).toUpperCase() + level.slice(1)}:`,
     options: {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: keyboard
       }
@@ -1063,7 +1063,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
       const fieldLabel = field.replace(/([A-Z])/g, ' $1').trim();
       bot.sendMessage(chatId, `Please enter your ${fieldLabel}:`, {
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       });
     }
 
@@ -1077,8 +1077,8 @@ bot.on('callback_query', async (callbackQuery) => {
         [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
       ];
 
-      bot.sendMessage(chatId, '*Select a teaching level to edit:*', {
-        parse_mode: 'Markdown',
+      bot.sendMessage(chatId, 'Select a teaching level to edit:', {
+        parse_mode: 'HTML',
         reply_markup: { inline_keyboard: keyboard }
       });
     }
@@ -1092,7 +1092,12 @@ bot.on('callback_query', async (callbackQuery) => {
       initializeTeachingLevels(tutor);
       
       const menu = getTeachingLevelMenu(tutor, level);
-      bot.sendMessage(chatId, menu.text, menu.options);
+      bot.sendMessage(chatId, menu.text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: menu.options.reply_markup.inline_keyboard
+        }
+      });
     }
 
     // Teaching Levels: Step 3 — toggle subject on/off
@@ -1111,7 +1116,10 @@ bot.on('callback_query', async (callbackQuery) => {
       bot.editMessageText(updatedMenu.text, {
         chat_id: chatId,
         message_id: callbackQuery.message.message_id,
-        ...updatedMenu.options
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: updatedMenu.options.reply_markup.inline_keyboard
+        }
       });
     }
     else if (data === 'edit_availableTimeSlots') {
@@ -1166,7 +1174,7 @@ bot.on('callback_query', async (callbackQuery) => {
       userSessions[chatId].state = 'editing_field';
       userSessions[chatId].editField = `hourlyRate.${level}`;
       bot.sendMessage(chatId, `Please enter the hourly rate for ${level.charAt(0).toUpperCase() + level.slice(1)}:`, {
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       });
     }
     else if (data === 'edit_introduction' || 
@@ -1179,7 +1187,7 @@ bot.on('callback_query', async (callbackQuery) => {
       
       const fieldLabel = field.replace(/([A-Z])/g, ' $1').trim();
       bot.sendMessage(chatId, `Please enter your ${fieldLabel}:`, {
-        parse_mode: 'Markdown'
+        parse_mode: 'HTML'
       });
     }
     else if (data === 'start') {
