@@ -260,79 +260,311 @@ function initializeTeachingLevels(tutor) {
 }
 
 function getAvailabilityMenu(tutor) {
-  const timeSlots = {
-    weekdayMorning: 'Weekday Morning',
-    weekdayAfternoon: 'Weekday Afternoon',
-    weekdayEvening: 'Weekday Evening',
-    weekendMorning: 'Weekend Morning',
-    weekendAfternoon: 'Weekend Afternoon',
-    weekendEvening: 'Weekend Evening'
-  };
-
-  const keyboard = [];
-
-  for (const [key, label] of Object.entries(timeSlots)) {
-    const tick = getTick(tutor.availableTimeSlots[key]);
-    keyboard.push([{
-      text: `${label} ${tick}`,
-      callback_data: `toggle_availability_${key}`
-    }]);
+  if (!tutor.availableTimeSlots) {
+    tutor.availableTimeSlots = {
+      weekdayMorning: false,
+      weekdayAfternoon: false,
+      weekdayEvening: false,
+      weekendMorning: false,
+      weekendAfternoon: false,
+      weekendEvening: false
+    };
   }
-
-  keyboard.push([{ text: '⬅️ Back', callback_data: 'profile_edit' }]);
-
-  return {
-    text: '*Select your available time slots:*',
-    options: {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: keyboard
+  
+  const keyboard = [
+    [
+      { 
+        text: `Weekday Morning ${tutor.availableTimeSlots.weekdayMorning ? '✅' : '❌'}`, 
+        callback_data: 'toggle_availability_weekdayMorning' 
       }
+    ],
+    [
+      { 
+        text: `Weekday Afternoon ${tutor.availableTimeSlots.weekdayAfternoon ? '✅' : '❌'}`, 
+        callback_data: 'toggle_availability_weekdayAfternoon' 
+      }
+    ],
+    [
+      { 
+        text: `Weekday Evening ${tutor.availableTimeSlots.weekdayEvening ? '✅' : '❌'}`, 
+        callback_data: 'toggle_availability_weekdayEvening' 
+      }
+    ],
+    [
+      { 
+        text: `Weekend Morning ${tutor.availableTimeSlots.weekendMorning ? '✅' : '❌'}`, 
+        callback_data: 'toggle_availability_weekendMorning' 
+      }
+    ],
+    [
+      { 
+        text: `Weekend Afternoon ${tutor.availableTimeSlots.weekendAfternoon ? '✅' : '❌'}`, 
+        callback_data: 'toggle_availability_weekendAfternoon' 
+      }
+    ],
+    [
+      { 
+        text: `Weekend Evening ${tutor.availableTimeSlots.weekendEvening ? '✅' : '❌'}`, 
+        callback_data: 'toggle_availability_weekendEvening' 
+      }
+    ],
+    [
+      { text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }
+    ]
+  ];
+  
+  return {
+    text: '<b>Availability</b>\nSelect your available time slots:',
+    options: {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
     }
   };
 }
 
 function getHourlyRateMenu(tutor) {
+  if (!tutor.hourlyRate) {
+    tutor.hourlyRate = {
+      primary: '',
+      secondary: '',
+      jc: '',
+      international: ''
+    };
+  }
+  
   const keyboard = [
-    [{ text: 'Primary', callback_data: 'edit_hourlyRate_primary' }],
-    [{ text: 'Secondary', callback_data: 'edit_hourlyRate_secondary' }],
-    [{ text: 'JC', callback_data: 'edit_hourlyRate_jc' }],
-    [{ text: 'International', callback_data: 'edit_hourlyRate_international' }],
-    [{ text: '⬅️ Back', callback_data: 'profile_edit' }]
+    [{ 
+      text: `Primary: $${tutor.hourlyRate.primary || 'Not set'}`, 
+      callback_data: 'edit_hourlyRate_primary' 
+    }],
+    [{ 
+      text: `Secondary: $${tutor.hourlyRate.secondary || 'Not set'}`, 
+      callback_data: 'edit_hourlyRate_secondary' 
+    }],
+    [{ 
+      text: `JC: $${tutor.hourlyRate.jc || 'Not set'}`, 
+      callback_data: 'edit_hourlyRate_jc' 
+    }],
+    [{ 
+      text: `International: $${tutor.hourlyRate.international || 'Not set'}`, 
+      callback_data: 'edit_hourlyRate_international' 
+    }],
+    [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
   ];
-
+  
   return {
-    text: '*Select level to edit hourly rate:*',
+    text: '<b>Hourly Rates</b>\nSelect a level to update its rate:',
     options: {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: keyboard
-      }
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
     }
   };
 }
 
-function getTeachingLevelMenu(tutor, level) {
-  const subjects = Object.keys(tutor.teachingLevels[level] || {});
-  const keyboard = [];
-
-  for (const subject of subjects) {
-    const tick = getTick(tutor.teachingLevels[level][subject]);
-    keyboard.push([{ 
-      text: `${subject.charAt(0).toUpperCase() + subject.slice(1)} ${tick}`, 
-      callback_data: `toggle_${level}_${subject}` 
-    }]);
+function getLocationsMenu(tutor) {
+  if (!tutor.locations) {
+    tutor.locations = {
+      north: false,
+      south: false,
+      east: false,
+      west: false,
+      central: false,
+      northeast: false,
+      northwest: false
+    };
   }
-
-  keyboard.push([{ text: '⬅️ Back', callback_data: 'edit_teachingLevels' }]);
-
+  
+  const keyboard = [
+    [
+      { 
+        text: `North ${tutor.locations.north ? '✅' : '❌'}`, 
+        callback_data: 'toggle_location_north' 
+      },
+      { 
+        text: `South ${tutor.locations.south ? '✅' : '❌'}`, 
+        callback_data: 'toggle_location_south' 
+      }
+    ],
+    [
+      { 
+        text: `East ${tutor.locations.east ? '✅' : '❌'}`, 
+        callback_data: 'toggle_location_east' 
+      },
+      { 
+        text: `West ${tutor.locations.west ? '✅' : '❌'}`, 
+        callback_data: 'toggle_location_west' 
+      }
+    ],
+    [
+      { 
+        text: `Central ${tutor.locations.central ? '✅' : '❌'}`, 
+        callback_data: 'toggle_location_central' 
+      }
+    ],
+    [
+      { 
+        text: `Northeast ${tutor.locations.northeast ? '✅' : '❌'}`, 
+        callback_data: 'toggle_location_northeast' 
+      },
+      { 
+        text: `Northwest ${tutor.locations.northwest ? '✅' : '❌'}`, 
+        callback_data: 'toggle_location_northwest' 
+      }
+    ],
+    [
+      { text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }
+    ]
+  ];
+  
   return {
-    text: `Select subjects for ${level.charAt(0).toUpperCase() + level.slice(1)}:`,
+    text: '<b>Preferred Locations</b>\nSelect the areas you can teach in:',
     options: {
       parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: keyboard
-      }
+      reply_markup: { inline_keyboard: keyboard }
+    }
+  };
+}
+
+function getTutorTypeMenu() {
+  const keyboard = [
+    [{ text: 'Full-time Tutor', callback_data: 'set_tutorType_fullTime' }],
+    [{ text: 'Part-time Tutor', callback_data: 'set_tutorType_partTime' }],
+    [{ text: 'MOE Teacher', callback_data: 'set_tutorType_moeTeacher' }],
+    [{ text: 'Undergraduate', callback_data: 'set_tutorType_undergraduate' }],
+    [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
+  ];
+  
+  return {
+    text: '<b>Tutor Type</b>\nSelect your tutor type:',
+    options: {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    }
+  };
+}
+
+function getGenderMenu() {
+  const keyboard = [
+    [{ text: 'Male', callback_data: 'set_gender_male' }],
+    [{ text: 'Female', callback_data: 'set_gender_female' }],
+    [{ text: 'Other', callback_data: 'set_gender_other' }],
+    [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
+  ];
+  
+  return {
+    text: '<b>Gender</b>\nSelect your gender:',
+    options: {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    }
+  };
+}
+
+function getNationalityMenu() {
+  const keyboard = [
+    [{ text: 'Singaporean', callback_data: 'set_nationality_singaporean' }],
+    [{ text: 'Permanent Resident', callback_data: 'set_nationality_pr' }],
+    [{ text: 'Other', callback_data: 'set_nationality_other' }],
+    [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
+  ];
+  
+  return {
+    text: '<b>Nationality</b>\nSelect your nationality:',
+    options: {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    }
+  };
+}
+
+// Helper function for race selection
+function getRaceMenu() {
+  const keyboard = [
+    [{ text: 'Chinese', callback_data: 'set_race_chinese' }],
+    [{ text: 'Malay', callback_data: 'set_race_malay' }],
+    [{ text: 'Indian', callback_data: 'set_race_indian' }],
+    [{ text: 'Eurasian', callback_data: 'set_race_eurasian' }],
+    [{ text: 'Other', callback_data: 'set_race_other' }],
+    [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
+  ];
+  
+  return {
+    text: '<b>Race</b>\nSelect your race:',
+    options: {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    }
+  };
+}
+
+// Helper function for highest education selection
+function getHighestEducationMenu() {
+  const keyboard = [
+    [{ text: 'O Levels', callback_data: 'set_highestEducation_oLevels' }],
+    [{ text: 'A Levels', callback_data: 'set_highestEducation_aLevels' }],
+    [{ text: 'Diploma', callback_data: 'set_highestEducation_diploma' }],
+    [{ text: 'Bachelor\'s Degree', callback_data: 'set_highestEducation_bachelors' }],
+    [{ text: 'Master\'s Degree', callback_data: 'set_highestEducation_masters' }],
+    [{ text: 'PhD', callback_data: 'set_highestEducation_phd' }],
+    [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
+  ];
+  
+  return {
+    text: '<b>Highest Education</b>\nSelect your highest educational qualification:',
+    options: {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
+    }
+  };
+}
+
+
+function getTeachingLevelMenu(tutor, level) {
+  const subjects = Object.keys(tutor.teachingLevels[level]);
+  const keyboard = [];
+  
+  // Create rows with 2 subjects per row
+  for (let i = 0; i < subjects.length; i += 2) {
+    const row = [];
+    
+    // First subject in row
+    const subject1 = subjects[i];
+    const isSelected1 = tutor.teachingLevels[level][subject1];
+    const formattedSubject1 = subject1.replace(/([A-Z])/g, ' $1').trim();
+    row.push({
+      text: `${formattedSubject1} ${isSelected1 ? '✅' : '❌'}`,
+      callback_data: `toggle_${level}_${subject1}`
+    });
+    
+    // Second subject in row (if exists)
+    if (i + 1 < subjects.length) {
+      const subject2 = subjects[i + 1];
+      const isSelected2 = tutor.teachingLevels[level][subject2];
+      const formattedSubject2 = subject2.replace(/([A-Z])/g, ' $1').trim();
+      row.push({
+        text: `${formattedSubject2} ${isSelected2 ? '✅' : '❌'}`,
+        callback_data: `toggle_${level}_${subject2}`
+      });
+    }
+    
+    keyboard.push(row);
+  }
+  
+  // Add back button
+  keyboard.push([
+    { text: '⬅️ Back to Teaching Levels', callback_data: 'edit_teachingLevels' }
+  ]);
+  
+  // Format level name for display
+  let levelName = level;
+  if (level === 'jc') levelName = 'JC';
+  else levelName = level.charAt(0).toUpperCase() + level.slice(1);
+  
+  return {
+    text: `<b>${levelName} Subjects</b>\nSelect the subjects you teach:`,
+    options: {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: keyboard }
     }
   };
 }
@@ -1054,142 +1286,8 @@ bot.on('callback_query', async (callbackQuery) => {
         bot.answerCallbackQuery(callbackQuery.id, 'Error retrieving tutor profile.');
       }
     }
-    // Handle field edit button press (e.g., edit_fullName)
-    else if (data.startsWith('edit_') && data !== 'edit_teachingLevels' && 
-             data !== 'edit_availableTimeSlots' && data !== 'edit_hourlyRate') {
-      const field = data.replace('edit_', '');
-      userSessions[chatId].state = 'editing_field';
-      userSessions[chatId].editField = field;
+    
 
-      const fieldLabel = field.replace(/([A-Z])/g, ' $1').trim();
-      bot.sendMessage(chatId, `Please enter your ${fieldLabel}:`, {
-        parse_mode: 'HTML'
-      });
-    }
-
-    // Teaching Levels: Step 1 — select level
-    else if (data === 'edit_teachingLevels') {
-      const keyboard = [
-        [{ text: 'Primary', callback_data: 'edit_teachingLevel_primary' }],
-        [{ text: 'Secondary', callback_data: 'edit_teachingLevel_secondary' }],
-        [{ text: 'JC', callback_data: 'edit_teachingLevel_jc' }],
-        [{ text: 'International', callback_data: 'edit_teachingLevel_international' }],
-        [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
-      ];
-
-      bot.sendMessage(chatId, 'Select a teaching level to edit:', {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: keyboard }
-      });
-    }
-
-    // Teaching Levels: Step 2 — show subjects for level
-    else if (data.startsWith('edit_teachingLevel_')) {
-      const level = data.split('_')[2];
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      
-      // Initialize teaching levels if needed
-      initializeTeachingLevels(tutor);
-      
-      const menu = getTeachingLevelMenu(tutor, level);
-      bot.sendMessage(chatId, menu.text, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: menu.options.reply_markup.inline_keyboard
-        }
-      });
-    }
-
-    // Teaching Levels: Step 3 — toggle subject on/off
-    else if (data.startsWith('toggle_')) {
-      const [, level, subject] = data.split('_');
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      
-      // Initialize teaching levels if needed
-      initializeTeachingLevels(tutor);
-
-      const currentValue = tutor.teachingLevels[level][subject];
-      tutor.teachingLevels[level][subject] = !currentValue;
-      await tutor.save();
-
-      const updatedMenu = getTeachingLevelMenu(tutor, level);
-      bot.editMessageText(updatedMenu.text, {
-        chat_id: chatId,
-        message_id: callbackQuery.message.message_id,
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: updatedMenu.options.reply_markup.inline_keyboard
-        }
-      });
-    }
-    else if (data === 'edit_availableTimeSlots') {
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      if (!tutor.availableTimeSlots) {
-        tutor.availableTimeSlots = {
-          weekdayMorning: false,
-          weekdayAfternoon: false,
-          weekdayEvening: false,
-          weekendMorning: false,
-          weekendAfternoon: false,
-          weekendEvening: false
-        };
-      }
-      const menu = getAvailabilityMenu(tutor);
-      bot.sendMessage(chatId, menu.text, menu.options);
-    }
-    else if (data.startsWith('toggle_availability_')) {
-      const timeSlot = data.split('_')[2];
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      
-      if (!tutor.availableTimeSlots) {
-        tutor.availableTimeSlots = {};
-      }
-      
-      const currentValue = tutor.availableTimeSlots[timeSlot] || false;
-      tutor.availableTimeSlots[timeSlot] = !currentValue;
-      await tutor.save();
-
-      const updatedMenu = getAvailabilityMenu(tutor);
-      bot.editMessageText(updatedMenu.text, {
-        chat_id: chatId,
-        message_id: callbackQuery.message.message_id,
-        ...updatedMenu.options
-      });
-    }
-    else if (data === 'edit_hourlyRate') {
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      if (!tutor.hourlyRate) {
-        tutor.hourlyRate = {
-          primary: '',
-          secondary: '',
-          jc: '',
-          international: ''
-        };
-      }
-      const menu = getHourlyRateMenu(tutor);
-      bot.sendMessage(chatId, menu.text, menu.options);
-    }
-    else if (data.startsWith('edit_hourlyRate_')) {
-      const level = data.split('_')[2];
-      userSessions[chatId].state = 'editing_field';
-      userSessions[chatId].editField = `hourlyRate.${level}`;
-      bot.sendMessage(chatId, `Please enter the hourly rate for ${level.charAt(0).toUpperCase() + level.slice(1)}:`, {
-        parse_mode: 'HTML'
-      });
-    }
-    else if (data === 'edit_introduction' || 
-             data === 'edit_teachingExperience' || 
-             data === 'edit_trackRecord' || 
-             data === 'edit_sellingPoints') {
-      const field = data.replace('edit_', '');
-      userSessions[chatId].state = 'editing_field';
-      userSessions[chatId].editField = field;
-      
-      const fieldLabel = field.replace(/([A-Z])/g, ' $1').trim();
-      bot.sendMessage(chatId, `Please enter your ${fieldLabel}:`, {
-        parse_mode: 'HTML'
-      });
-    }
     else if (data === 'start') {
       // Return to start
       bot.sendMessage(chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
@@ -1299,8 +1397,16 @@ bot.on('callback_query', async (callbackQuery) => {
           inline_keyboard: [
             [{ text: 'Full Name', callback_data: 'edit_fullName' }, { text: 'Email', callback_data: 'edit_email' }],
             [{ text: 'Age', callback_data: 'edit_age' }, { text: 'Gender', callback_data: 'edit_gender' }],
-            [{ text: 'Experience', callback_data: 'edit_yearsOfExperience' }],
+            [{ text: 'Nationality', callback_data: 'edit_nationality' }],
+            [{ text: 'Race', callback_data: 'edit_race' }],
+            [{ text: 'NRIC (Last 4 digits)', callback_data: 'edit_nricLast4' }],
+            [{ text: 'Tutor Type', callback_data: 'edit_tutorType' }],
+            [{ text: 'Years of Experience', callback_data: 'edit_yearsOfExperience' }],
+            [{ text: 'Highest Education', callback_data: 'edit_highestEducation' }],
+            [{ text: 'Current School', callback_data: 'edit_currentSchool' }],
+            [{ text: 'Previous Schools', callback_data: 'edit_previousSchools' }],
             [{ text: 'Teaching Levels', callback_data: 'edit_teachingLevels' }],
+            [{ text: 'Locations', callback_data: 'edit_locations' }],
             [{ text: 'Hourly Rates', callback_data: 'edit_hourlyRate' }],
             [{ text: 'Availability', callback_data: 'edit_availableTimeSlots' }],
             [{ text: 'Introduction', callback_data: 'edit_introduction' }],
@@ -1310,6 +1416,310 @@ bot.on('callback_query', async (callbackQuery) => {
             [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
           ]
         }
+      });
+    }
+    else if (data.startsWith('edit_') && 
+             data !== 'edit_teachingLevels' && 
+             data !== 'edit_availableTimeSlots' && 
+             data !== 'edit_hourlyRate' &&
+             data !== 'edit_locations' &&
+             data !== 'edit_gender' &&
+             data !== 'edit_nationality' &&
+             data !== 'edit_race' &&
+             data !== 'edit_tutorType' &&
+             data !== 'edit_highestEducation' &&
+             data !== 'edit_dob') {
+      const field = data.replace('edit_', '');
+      userSessions[chatId].state = 'editing_field';
+      userSessions[chatId].editField = field;
+
+      const fieldLabel = field.replace(/([A-Z])/g, ' $1').trim();
+      bot.sendMessage(chatId, `Please enter your ${fieldLabel}:`, {
+        parse_mode: 'HTML'
+      });
+    }
+    
+    // Special selection menus
+    else if (data === 'edit_gender') {
+      const menu = getGenderMenu();
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('set_gender_')) {
+      const gender = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      tutor.gender = gender.charAt(0).toUpperCase() + gender.slice(1);
+      await tutor.save();
+      
+      bot.sendMessage(chatId, `✅ Your gender has been updated to: <b>${tutor.gender}</b>`, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]]
+        }
+      });
+    }
+    
+    else if (data === 'edit_nationality') {
+      const menu = getNationalityMenu();
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('set_nationality_')) {
+      const nationality = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      if (nationality === 'other') {
+        userSessions[chatId].state = 'editing_field';
+        userSessions[chatId].editField = 'nationalityOther';
+        bot.sendMessage(chatId, 'Please specify your nationality:', {
+          parse_mode: 'HTML'
+        });
+      } else {
+        tutor.nationality = nationality.charAt(0).toUpperCase() + nationality.slice(1);
+        await tutor.save();
+        
+        bot.sendMessage(chatId, `✅ Your nationality has been updated to: <b>${tutor.nationality}</b>`, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]]
+          }
+        });
+      }
+    }
+    
+    else if (data === 'edit_race') {
+      const menu = getRaceMenu();
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('set_race_')) {
+      const race = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      tutor.race = race.charAt(0).toUpperCase() + race.slice(1);
+      await tutor.save();
+      
+      bot.sendMessage(chatId, `✅ Your race has been updated to: <b>${tutor.race}</b>`, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]]
+        }
+      });
+    }
+    
+    else if (data === 'edit_tutorType') {
+      const menu = getTutorTypeMenu();
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('set_tutorType_')) {
+      const tutorType = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      let formattedType;
+      switch(tutorType) {
+        case 'fullTime':
+          formattedType = 'Full-time Tutor';
+          break;
+        case 'partTime':
+          formattedType = 'Part-time Tutor';
+          break;
+        case 'moeTeacher':
+          formattedType = 'MOE Teacher';
+          break;
+        case 'undergraduate':
+          formattedType = 'Undergraduate';
+          break;
+        default:
+          formattedType = tutorType;
+      }
+      
+      tutor.tutorType = formattedType;
+      await tutor.save();
+      
+      bot.sendMessage(chatId, `✅ Your tutor type has been updated to: <b>${tutor.tutorType}</b>`, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]]
+        }
+      });
+    }
+    
+    else if (data === 'edit_highestEducation') {
+      const menu = getHighestEducationMenu();
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('set_highestEducation_')) {
+      const education = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      let formattedEducation;
+      switch(education) {
+        case 'oLevels':
+          formattedEducation = 'O Levels';
+          break;
+        case 'aLevels':
+          formattedEducation = 'A Levels';
+          break;
+        case 'diploma':
+          formattedEducation = 'Diploma';
+          break;
+        case 'bachelors':
+          formattedEducation = 'Bachelor\'s Degree';
+          break;
+        case 'masters':
+          formattedEducation = 'Master\'s Degree';
+          break;
+        case 'phd':
+          formattedEducation = 'PhD';
+          break;
+        default:
+          formattedEducation = education;
+      }
+      
+      tutor.highestEducation = formattedEducation;
+      await tutor.save();
+      
+      bot.sendMessage(chatId, `✅ Your highest education has been updated to: <b>${tutor.highestEducation}</b>`, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]]
+        }
+      });
+    }
+    else if (data === 'edit_teachingLevels') {
+      const keyboard = [
+        [{ text: 'Primary', callback_data: 'edit_teachingLevel_primary' }],
+        [{ text: 'Secondary', callback_data: 'edit_teachingLevel_secondary' }],
+        [{ text: 'JC', callback_data: 'edit_teachingLevel_jc' }],
+        [{ text: 'International', callback_data: 'edit_teachingLevel_international' }],
+        [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
+      ];
+
+      bot.sendMessage(chatId, 'Select a teaching level to edit:', {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    }
+
+    // Teaching Levels: Step 2 — show subjects for level
+    else if (data.startsWith('edit_teachingLevel_')) {
+      const level = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      // Initialize teaching levels if needed
+      initializeTeachingLevels(tutor);
+      
+      const menu = getTeachingLevelMenu(tutor, level);
+      bot.sendMessage(chatId, menu.text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: menu.options.reply_markup.inline_keyboard
+        }
+      });
+    }
+
+    // Teaching Levels: Step 3 — toggle subject on/off
+    else if (data.startsWith('toggle_')) {
+      const [action, type, field] = data.split('_');
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      if (type === 'availability') {
+        // Handle availability toggle
+        if (!tutor.availableTimeSlots) {
+          tutor.availableTimeSlots = {};
+        }
+        
+        const currentValue = tutor.availableTimeSlots[field] || false;
+        tutor.availableTimeSlots[field] = !currentValue;
+        await tutor.save();
+
+        const updatedMenu = getAvailabilityMenu(tutor);
+        bot.editMessageText(updatedMenu.text, {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          parse_mode: 'HTML',
+          reply_markup: updatedMenu.options.reply_markup
+        });
+      } 
+      else if (type === 'location') {
+        // Handle location toggle
+        if (!tutor.locations) {
+          tutor.locations = {};
+        }
+        
+        const currentValue = tutor.locations[field] || false;
+        tutor.locations[field] = !currentValue;
+        await tutor.save();
+
+        const updatedMenu = getLocationsMenu(tutor);
+        bot.editMessageText(updatedMenu.text, {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          parse_mode: 'HTML',
+          reply_markup: updatedMenu.options.reply_markup
+        });
+      }
+      else {
+        // Handle teaching level toggle (primary, secondary, etc.)
+        // Initialize teaching levels if needed
+        initializeTeachingLevels(tutor);
+
+        const currentValue = tutor.teachingLevels[type][field];
+        tutor.teachingLevels[type][field] = !currentValue;
+        await tutor.save();
+
+        const updatedMenu = getTeachingLevelMenu(tutor, type);
+        bot.editMessageText(updatedMenu.text, {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: updatedMenu.options.reply_markup.inline_keyboard
+          }
+        });
+      }
+    }
+    
+    // Availability menu
+    else if (data === 'edit_availableTimeSlots') {
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      if (!tutor.availableTimeSlots) {
+        tutor.availableTimeSlots = {
+          weekdayMorning: false,
+          weekdayAfternoon: false,
+          weekdayEvening: false,
+          weekendMorning: false,
+          weekendAfternoon: false,
+          weekendEvening: false
+        };
+      }
+      const menu = getAvailabilityMenu(tutor);
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    
+    // Locations menu
+    else if (data === 'edit_locations') {
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      const menu = getLocationsMenu(tutor);
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    
+    // Hourly rate menu
+    else if (data === 'edit_hourlyRate') {
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      if (!tutor.hourlyRate) {
+        tutor.hourlyRate = {
+          primary: '',
+          secondary: '',
+          jc: '',
+          international: ''
+        };
+      }
+      const menu = getHourlyRateMenu(tutor);
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('edit_hourlyRate_')) {
+      const level = data.split('_')[2];
+      userSessions[chatId].state = 'editing_field';
+      userSessions[chatId].editField = `hourlyRate.${level}`;
+      bot.sendMessage(chatId, `Please enter the hourly rate for ${level.charAt(0).toUpperCase() + level.slice(1)}:`, {
+        parse_mode: 'HTML'
       });
     }
     
