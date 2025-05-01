@@ -190,6 +190,33 @@ app.get('/', (req, res) => {
 // Store user sessions
 const userSessions = {};
 
+const getTick = (val) => val ? '✔️' : '❌';
+
+function getTeachingLevelMenu(tutor, level) {
+  const subjects = Object.keys(tutor.teachingLevels[level] || {});
+  const keyboard = [];
+
+  for (const subject of subjects) {
+    const tick = getTick(tutor.teachingLevels[level][subject]);
+    keyboard.push([{ 
+      text: `${subject.charAt(0).toUpperCase() + subject.slice(1)} ${tick}`, 
+      callback_data: `toggle_${level}_${subject}` 
+    }]);
+  }
+
+  keyboard.push([{ text: '⬅️ Back', callback_data: 'edit_teachingLevels' }]);
+
+  return {
+    text: `*Select subjects for ${level.charAt(0).toUpperCase() + level.slice(1)}:*`,
+    options: {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: keyboard
+      }
+    }
+  };
+}
+
 // Pagination settings
 const ITEMS_PER_PAGE = 5;
 
@@ -907,6 +934,59 @@ bot.on('callback_query', async (callbackQuery) => {
         bot.answerCallbackQuery(callbackQuery.id, 'Error retrieving tutor profile.');
       }
     }
+    // Handle field edit button press (e.g., edit_fullName)
+    else if (data.startsWith('edit_') && data !== 'edit_teachingLevels') {
+      const field = data.replace('edit_', '');
+      userSessions[chatId].state = 'editing_field';
+      userSessions[chatId].editField = field;
+
+      bot.sendMessage(chatId, `Please enter your new value for *${field}*:`, {
+        parse_mode: 'Markdown'
+      });
+    }
+
+    // Teaching Levels: Step 1 — select level
+    else if (data === 'edit_teachingLevels') {
+      const keyboard = [
+        [{ text: 'Primary', callback_data: 'edit_teachingLevel_primary' }],
+        [{ text: 'Secondary', callback_data: 'edit_teachingLevel_secondary' }],
+        [{ text: 'JC', callback_data: 'edit_teachingLevel_jc' }],
+        [{ text: 'International', callback_data: 'edit_teachingLevel_international' }],
+        [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
+      ];
+
+      bot.sendMessage(chatId, '*Select a teaching level to edit:*', {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    }
+
+    // Teaching Levels: Step 2 — show subjects for level
+    else if (data.startsWith('edit_teachingLevel_')) {
+      const level = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      const menu = getTeachingLevelMenu(tutor, level);
+
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+
+    // Teaching Levels: Step 3 — toggle subject on/off
+    else if (data.startsWith('toggle_')) {
+      const [, level, subject] = data.split('_');
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+
+      const currentValue = tutor.teachingLevels[level][subject];
+      tutor.teachingLevels[level][subject] = !currentValue;
+      await tutor.save();
+
+      const updatedMenu = getTeachingLevelMenu(tutor, level);
+      bot.editMessageText(updatedMenu.text, {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id,
+        ...updatedMenu.options
+      });
+    }
+
     // Handle regular user actions
     else if (data === 'start') {
       // Return to start
@@ -1011,11 +1091,22 @@ bot.on('callback_query', async (callbackQuery) => {
         return bot.sendMessage(chatId, 'Session expired. Please start again.');
       }
     
-      userSessions[chatId].state = 'editing_profile';
-      userSessions[chatId].editStep = 'fullName';
-    
-      bot.sendMessage(chatId, 'Let\'s update your profile.\n\nWhat is your full name?');
+      bot.sendMessage(chatId, '*Which field would you like to update?*', {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Full Name', callback_data: 'edit_fullName' }, { text: 'Email', callback_data: 'edit_email' }],
+            [{ text: 'Age', callback_data: 'edit_age' }, { text: 'Gender', callback_data: 'edit_gender' }],
+            [{ text: 'Experience', callback_data: 'edit_yearsOfExperience' }],
+            [{ text: 'Teaching Levels', callback_data: 'edit_teachingLevels' }],
+            [{ text: 'Hourly Rates', callback_data: 'edit_hourlyRate' }],
+            [{ text: 'Availability', callback_data: 'edit_availableTimeSlots' }],
+            [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+          ]
+        }
+      });
     }
+    
     else if (data === 'main_menu') {
       // Show main menu
       showMainMenu(chatId);
@@ -1644,6 +1735,29 @@ bot.on('message', (msg) => {
     userSessions[chatId].lastActive = Date.now();
   }
 });
+
+// Handle field-specific profile editing (Step 4)
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+
+  if (userSessions[chatId]?.state === 'editing_field') {
+    const field = userSessions[chatId].editField;
+    try {
+      await Tutor.findByIdAndUpdate(userSessions[chatId].tutorId, { [field]: text });
+      userSessions[chatId].state = 'main_menu';
+      delete userSessions[chatId].editField;
+
+      bot.sendMessage(chatId, `✅ *${field}* has been updated successfully.`, {
+        parse_mode: 'Markdown'
+      });
+    } catch (err) {
+      console.error(`Error updating ${field}:`, err);
+      bot.sendMessage(chatId, 'There was an error updating your profile. Please try again later.');
+    }
+  }
+});
+
 
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
