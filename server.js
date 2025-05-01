@@ -1414,8 +1414,10 @@ bot.on('callback_query', async (callbackQuery) => {
     }
     else if (data.startsWith('edit_') && 
              data !== 'edit_teachingLevels' && 
+             !data.startsWith('edit_teachingLevel_') &&
              data !== 'edit_availableTimeSlots' && 
              data !== 'edit_hourlyRate' &&
+             !data.startsWith('edit_hourlyRate_') &&
              data !== 'edit_locations' &&
              data !== 'edit_gender' &&
              data !== 'edit_nationality' &&
@@ -1576,121 +1578,134 @@ bot.on('callback_query', async (callbackQuery) => {
         }
       });
     }
+    // Teaching Levels: Step 1
     else if (data === 'edit_teachingLevels') {
-      const keyboard = [
-        [{ text: 'Primary', callback_data: 'edit_teachingLevel_primary' }],
-        [{ text: 'Secondary', callback_data: 'edit_teachingLevel_secondary' }],
-        [{ text: 'JC', callback_data: 'edit_teachingLevel_jc' }],
-        [{ text: 'International', callback_data: 'edit_teachingLevel_international' }],
-        [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
-      ];
+        const keyboard = [
+            [{ text: 'Primary', callback_data: 'edit_teachingLevel_primary' }],
+            [{ text: 'Secondary', callback_data: 'edit_teachingLevel_secondary' }],
+            [{ text: 'JC', callback_data: 'edit_teachingLevel_jc' }],
+            [{ text: 'International', callback_data: 'edit_teachingLevel_international' }],
+            [{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]
+        ];
 
-      bot.sendMessage(chatId, 'Select a teaching level to edit:', {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: keyboard }
-      });
+        // Edit the existing message (likely the profile edit menu)
+         try {
+            await bot.editMessageText('Select a teaching level to edit:', {
+               chat_id: chatId,
+               message_id: callbackQuery.message.message_id,
+               parse_mode: 'HTML', // Keep parse_mode consistent if needed
+               reply_markup: { inline_keyboard: keyboard }
+            });
+         } catch (editError) {
+             console.error("Failed to edit message for teaching levels, sending new one:", editError);
+             await bot.sendMessage(chatId, 'Select a teaching level to edit:', {
+                 parse_mode: 'HTML',
+                 reply_markup: { inline_keyboard: keyboard }
+             });
+         }
     }
 
-    // Teaching Levels: Step 2 — show subjects for level
+    // Teaching Levels: Step 2 — show subjects for selected level
     else if (data.startsWith('edit_teachingLevel_')) {
-      const level = data.split('_')[2];
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      
-      // Initialize teaching levels if needed
-      if (!tutor.teachingLevels) {
-        initializeTeachingLevels(tutor);
-        await tutor.save();
-      }
-      
-      // Double check the specific level exists
-      if (!tutor.teachingLevels[level]) {
-        initializeTeachingLevels(tutor);
-        await tutor.save();
-      }
-      
-      console.log(`Opening teaching level menu for ${level}`);
-      console.log(`Current teachingLevels:`, tutor.teachingLevels);
-      
-      const menu = getTeachingLevelMenu(tutor, level);
-      bot.sendMessage(chatId, menu.text, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: menu.options.reply_markup.inline_keyboard
+        const level = data.split('_')[2]; // e.g., 'primary'
+        const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+
+        // Ensure teachingLevels and the specific level object are initialized
+        if (!tutor.teachingLevels) {
+            initializeTeachingLevels(tutor); // Your existing initialization function
+            await tutor.save();
+        } else if (!tutor.teachingLevels[level]) {
+             // Attempt to initialize just the specific level based on schema defaults
+             tutor.teachingLevels[level] = {};
+             const levelSchema = tutorSchema.path(`teachingLevels.${level}`); // Get schema info
+             if (levelSchema && levelSchema.schema && levelSchema.schema.paths) {
+                 Object.keys(levelSchema.schema.paths).forEach(key => {
+                    // Check if it's a direct path (subject) and not internal like _id
+                    if (!key.startsWith('_') && tutorSchema.path(`teachingLevels.${level}.${key}`) instanceof mongoose.Schema.Types.Boolean) {
+                        tutor.teachingLevels[level][key] = false; // Default to false
+                    }
+                 });
+             } else {
+                 console.warn(`Could not find schema definition for teachingLevels.${level} to initialize.`);
+                 // Handle cases like 'international' if it has a different structure or add manually
+                 if(level === 'primary'){ /* add default primary subjects */ }
+                 // ... etc.
+             }
+             await tutor.save();
         }
-      });
+
+
+        console.log(`Opening teaching level menu for ${level}`);
+        const menu = getTeachingLevelMenu(tutor, level); // Generate the subject menu
+
+        // Edit the message (which was showing the level selection) to show subjects
+        try {
+            await bot.editMessageText(menu.text, {
+                chat_id: chatId,
+                message_id: callbackQuery.message.message_id,
+                parse_mode: 'HTML',
+                reply_markup: menu.options.reply_markup // Contains inline_keyboard
+            });
+        } catch (editError) {
+            console.error(`Failed to edit message for ${level} subjects, sending new one:`, editError);
+            await bot.sendMessage(chatId, menu.text, menu.options);
+        }
     }
 
-    // Teaching Levels: Step 3 — toggle subject on/off
+    // Handle Toggles (Locations, Availability, Teaching Level Subjects)
     else if (data.startsWith('toggle_')) {
-      const [action, type, field] = data.split('_');
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      
-      if (type === 'availability') {
-        // Handle availability toggle
-        if (!tutor.availableTimeSlots) {
-          tutor.availableTimeSlots = {};
-        }
-        
-        const currentValue = tutor.availableTimeSlots[field] || false;
-        tutor.availableTimeSlots[field] = !currentValue;
-        await tutor.save();
+        const parts = data.split('_'); // e.g., ['toggle', 'primary', 'math'] or ['toggle', 'location', 'north']
+        const action = parts[0];
+        const type = parts[1]; // 'location', 'availability', or a teaching level like 'primary', 'secondary'
+        const field = parts.slice(2).join('_'); // Join remaining parts for fields like 'weekdayMorning' or 'aMath'
 
-        const updatedMenu = getAvailabilityMenu(tutor);
-        bot.editMessageText(updatedMenu.text, {
-          chat_id: chatId,
-          message_id: callbackQuery.message.message_id,
-          parse_mode: 'HTML',
-          reply_markup: updatedMenu.options.reply_markup
-        });
-      } 
-      else if (type === 'location') {
-        // Handle location toggle
-        if (!tutor.locations) {
-          tutor.locations = {};
-        }
-        
-        const currentValue = tutor.locations[field] || false;
-        tutor.locations[field] = !currentValue;
-        await tutor.save();
+        const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+        let updatedMenu; // To store the regenerated menu
 
-        const updatedMenu = getLocationsMenu(tutor);
-        bot.editMessageText(updatedMenu.text, {
-          chat_id: chatId,
-          message_id: callbackQuery.message.message_id,
-          parse_mode: 'HTML',
-          reply_markup: updatedMenu.options.reply_markup
-        });
-      }
-      else {
-        // Handle teaching level toggle (primary, secondary, etc.)
-        // Initialize teaching levels if needed
-        if (!tutor.teachingLevels) {
-          initializeTeachingLevels(tutor);
-        }
-        
-        // Make sure the specific level object exists
-        if (!tutor.teachingLevels[type]) {
-          tutor.teachingLevels[type] = {};
-        }
-        
-        // Toggle the boolean value
-        const currentValue = tutor.teachingLevels[type][field] || false;
-        tutor.teachingLevels[type][field] = !currentValue;
-        
-        console.log(`Toggling ${type}.${field} from ${currentValue} to ${!currentValue}`);
-        
-        await tutor.save();
+        try {
+            if (type === 'availability') {
+                if (!tutor.availableTimeSlots) tutor.availableTimeSlots = {}; // Initialize if needed
+                const currentValue = tutor.availableTimeSlots[field] || false;
+                tutor.availableTimeSlots[field] = !currentValue;
+                updatedMenu = getAvailabilityMenu(tutor); // Get updated availability menu
+            }
+            else if (type === 'location') {
+                if (!tutor.locations) tutor.locations = {}; // Initialize if needed
+                const currentValue = tutor.locations[field] || false;
+                tutor.locations[field] = !currentValue;
+                updatedMenu = getLocationsMenu(tutor); // Get updated locations menu
+            }
+            else { // Assume it's a teaching level subject toggle
+                if (!tutor.teachingLevels) initializeTeachingLevels(tutor); // Initialize top level
+                if (!tutor.teachingLevels[type]) { // Initialize specific level if needed
+                    tutor.teachingLevels[type] = {};
+                    // Add default schema init logic here if needed, similar to 'edit_teachingLevel_'
+                }
 
-        const updatedMenu = getTeachingLevelMenu(tutor, type);
-        bot.editMessageText(updatedMenu.text, {
-          chat_id: chatId,
-          message_id: callbackQuery.message.message_id,
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: updatedMenu.options.reply_markup.inline_keyboard
-          }
-        });
-      }
+                const currentValue = tutor.teachingLevels[type][field] || false;
+                tutor.teachingLevels[type][field] = !currentValue;
+                console.log(`Toggled ${type}.${field} from ${currentValue} to ${!currentValue}`);
+                updatedMenu = getTeachingLevelMenu(tutor, type); // Get updated subject menu for this level
+            }
+
+            await tutor.save(); // Save changes to the database
+
+            // Edit the message to show the updated state
+            if (updatedMenu) {
+                 await bot.editMessageText(updatedMenu.text, {
+                    chat_id: chatId,
+                    message_id: callbackQuery.message.message_id,
+                    parse_mode: 'HTML',
+                    reply_markup: updatedMenu.options.reply_markup
+                 });
+            } else {
+                 console.error("Failed to generate updated menu for toggle:", data);
+                 await bot.answerCallbackQuery(callbackQuery.id, 'Error updating display.'); // Inform user via popup
+            }
+        } catch (err) {
+            console.error(`Error handling toggle ${data}:`, err);
+            await bot.answerCallbackQuery(callbackQuery.id, 'Error saving update.'); // Inform user via popup
+        }
     }
     
     // Availability menu
@@ -1720,51 +1735,57 @@ bot.on('callback_query', async (callbackQuery) => {
     // Hourly rate menu
     else if (data === 'edit_hourlyRate') {
       const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      let changed = false; // Flag to check if we initialized
+      // Ensure initialization AND SAVE if needed
       if (!tutor.hourlyRate) {
-        tutor.hourlyRate = {
-          primary: '',
-          secondary: '',
-          jc: '',
-          international: ''
-        };
+          console.log(`Initializing hourlyRate for tutor ${tutor._id}`);
+          tutor.hourlyRate = { primary: '', secondary: '', jc: '', international: '' };
+          changed = true;
       }
-      const menu = getHourlyRateMenu(tutor);
-      bot.sendMessage(chatId, menu.text, menu.options);
-    }
-    else if (data === 'edit_hourlyRate') {
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      if (!tutor.hourlyRate) {
-        tutor.hourlyRate = {
-          primary: '',
-          secondary: '',
-          jc: '',
-          international: ''
-        };
+      // Also check if individual keys are missing if needed (though initializing object is usually enough)
+      // if(tutor.hourlyRate.primary === undefined) { /* set default, changed = true; */ } ...
+
+      if (changed) {
+          await tutor.save(); // <<< SAVE THE INITIALIZATION
       }
+
       const menu = getHourlyRateMenu(tutor);
-      bot.sendMessage(chatId, menu.text, menu.options);
-    }
+      // Edit the previous message for smoother UX
+       try {
+          await bot.editMessageText(menu.text, {
+              chat_id: chatId,
+              message_id: callbackQuery.message.message_id,
+              parse_mode: 'HTML', // Ensure parse_mode is consistent
+              reply_markup: menu.options.reply_markup
+          });
+       } catch (editError) {
+           console.error("Failed to edit message for hourly rates, sending new one:", editError);
+           await bot.sendMessage(chatId, menu.text, menu.options); // Fallback
+       }
+  }
+    // Hourly rate specific level edit trigger
     else if (data.startsWith('edit_hourlyRate_')) {
-      const level = data.split('_')[2];
-      userSessions[chatId].state = 'editing_field';
-      userSessions[chatId].editField = `hourlyRate.${level}`;
-      
-      // Make sure tutor has hourlyRate initialized
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      if (!tutor.hourlyRate) {
-        tutor.hourlyRate = {
-          primary: '',
-          secondary: '',
-          jc: '',
-          international: ''
-        };
-        await tutor.save();
-      }
-      
-      const displayLevel = level === 'jc' ? 'JC' : level.charAt(0).toUpperCase() + level.slice(1);
-      bot.sendMessage(chatId, `Please enter the hourly rate for ${displayLevel}:`, {
-        parse_mode: 'HTML'
-      });
+        const level = data.split('_')[2];
+        userSessions[chatId].state = 'editing_field';
+        userSessions[chatId].editField = `hourlyRate.${level}`; // Set field for message handler
+
+        // Ensure tutor has hourlyRate initialized (optional but good practice)
+        const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+        if (!tutor.hourlyRate) {
+            tutor.hourlyRate = { primary: '', secondary: '', jc: '', international: '' };
+            await tutor.save();
+        }
+
+        const displayLevel = level === 'jc' ? 'JC' : level.charAt(0).toUpperCase() + level.slice(1);
+        // Send an *explicit* new message asking for the rate.
+        await bot.sendMessage(chatId, `Please enter the hourly rate for ${displayLevel}:`);
+
+        // Optional: Try to delete the menu message the user just clicked for tidiness
+        try {
+            await bot.deleteMessage(chatId, callbackQuery.message.message_id);
+        } catch (deleteError) {
+            console.log("Could not delete previous menu message:", deleteError.message);
+        }
     }
     
     else if (data === 'main_menu') {
@@ -2456,41 +2477,7 @@ bot.on('message', async (msg) => {
 });
 
 
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
-  const text = msg.text;
 
-  if (!userSessions[chatId] || userSessions[chatId].state !== 'editing_profile') return;
-
-  const tutorId = userSessions[chatId].tutorId;
-  const step = userSessions[chatId].editStep;
-
-  const nextSteps = {
-    fullName: 'age',
-    age: 'email',
-    email: 'gender',
-    gender: 'introduction',
-    introduction: null // finish here for now
-  };
-
-  try {
-    await Tutor.findByIdAndUpdate(tutorId, { [step]: text });
-
-    const nextStep = nextSteps[step];
-    if (nextStep) {
-      userSessions[chatId].editStep = nextStep;
-      bot.sendMessage(chatId, `Got it! What's your ${nextStep}?`);
-    } else {
-      delete userSessions[chatId].editStep;
-      userSessions[chatId].state = 'main_menu';
-      bot.sendMessage(chatId, 'Your profile has been updated successfully.');
-      showMainMenu(chatId);
-    }
-  } catch (err) {
-    console.error('Error updating tutor profile:', err);
-    bot.sendMessage(chatId, 'There was an error updating your profile. Please try again later.');
-  }
-});
 
 // Start Express server
 const PORT = process.env.PORT || 3000;
