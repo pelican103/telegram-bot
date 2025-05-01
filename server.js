@@ -1055,12 +1055,14 @@ bot.on('callback_query', async (callbackQuery) => {
       }
     }
     // Handle field edit button press (e.g., edit_fullName)
-    else if (data.startsWith('edit_') && data !== 'edit_teachingLevels') {
+    else if (data.startsWith('edit_') && data !== 'edit_teachingLevels' && 
+             data !== 'edit_availableTimeSlots' && data !== 'edit_hourlyRate') {
       const field = data.replace('edit_', '');
       userSessions[chatId].state = 'editing_field';
       userSessions[chatId].editField = field;
 
-      bot.sendMessage(chatId, `Please enter your new value for *${field}*:`, {
+      const fieldLabel = field.replace(/([A-Z])/g, ' $1').trim();
+      bot.sendMessage(chatId, `Please enter your ${fieldLabel}:`, {
         parse_mode: 'Markdown'
       });
     }
@@ -1112,8 +1114,74 @@ bot.on('callback_query', async (callbackQuery) => {
         ...updatedMenu.options
       });
     }
+    else if (data === 'edit_availableTimeSlots') {
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      if (!tutor.availableTimeSlots) {
+        tutor.availableTimeSlots = {
+          weekdayMorning: false,
+          weekdayAfternoon: false,
+          weekdayEvening: false,
+          weekendMorning: false,
+          weekendAfternoon: false,
+          weekendEvening: false
+        };
+      }
+      const menu = getAvailabilityMenu(tutor);
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('toggle_availability_')) {
+      const timeSlot = data.split('_')[2];
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      
+      if (!tutor.availableTimeSlots) {
+        tutor.availableTimeSlots = {};
+      }
+      
+      const currentValue = tutor.availableTimeSlots[timeSlot] || false;
+      tutor.availableTimeSlots[timeSlot] = !currentValue;
+      await tutor.save();
 
-    // Handle regular user actions
+      const updatedMenu = getAvailabilityMenu(tutor);
+      bot.editMessageText(updatedMenu.text, {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id,
+        ...updatedMenu.options
+      });
+    }
+    else if (data === 'edit_hourlyRate') {
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      if (!tutor.hourlyRate) {
+        tutor.hourlyRate = {
+          primary: '',
+          secondary: '',
+          jc: '',
+          international: ''
+        };
+      }
+      const menu = getHourlyRateMenu(tutor);
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
+    else if (data.startsWith('edit_hourlyRate_')) {
+      const level = data.split('_')[2];
+      userSessions[chatId].state = 'editing_field';
+      userSessions[chatId].editField = `hourlyRate.${level}`;
+      bot.sendMessage(chatId, `Please enter the hourly rate for ${level.charAt(0).toUpperCase() + level.slice(1)}:`, {
+        parse_mode: 'Markdown'
+      });
+    }
+    else if (data === 'edit_introduction' || 
+             data === 'edit_teachingExperience' || 
+             data === 'edit_trackRecord' || 
+             data === 'edit_sellingPoints') {
+      const field = data.replace('edit_', '');
+      userSessions[chatId].state = 'editing_field';
+      userSessions[chatId].editField = field;
+      
+      const fieldLabel = field.replace(/([A-Z])/g, ' $1').trim();
+      bot.sendMessage(chatId, `Please enter your ${fieldLabel}:`, {
+        parse_mode: 'Markdown'
+      });
+    }
     else if (data === 'start') {
       // Return to start
       bot.sendMessage(chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
@@ -1463,61 +1531,6 @@ bot.on('callback_query', async (callbackQuery) => {
           }
         });
       }
-    }
-    else if (data === 'edit_availableTimeSlots') {
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      if (!tutor.availableTimeSlots) {
-        tutor.availableTimeSlots = {
-          weekdayMorning: false,
-          weekdayAfternoon: false,
-          weekdayEvening: false,
-          weekendMorning: false,
-          weekendAfternoon: false,
-          weekendEvening: false
-        };
-      }
-      const menu = getAvailabilityMenu(tutor);
-      bot.sendMessage(chatId, menu.text, menu.options);
-    }
-    else if (data.startsWith('toggle_availability_')) {
-      const timeSlot = data.split('_')[2];
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      
-      if (!tutor.availableTimeSlots) {
-        tutor.availableTimeSlots = {};
-      }
-      
-      const currentValue = tutor.availableTimeSlots[timeSlot] || false;
-      tutor.availableTimeSlots[timeSlot] = !currentValue;
-      await tutor.save();
-
-      const updatedMenu = getAvailabilityMenu(tutor);
-      bot.editMessageText(updatedMenu.text, {
-        chat_id: chatId,
-        message_id: callbackQuery.message.message_id,
-        ...updatedMenu.options
-      });
-    }
-    else if (data === 'edit_hourlyRate') {
-      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      if (!tutor.hourlyRate) {
-        tutor.hourlyRate = {
-          primary: '',
-          secondary: '',
-          jc: '',
-          international: ''
-        };
-      }
-      const menu = getHourlyRateMenu(tutor);
-      bot.sendMessage(chatId, menu.text, menu.options);
-    }
-    else if (data.startsWith('edit_hourlyRate_')) {
-      const level = data.split('_')[2];
-      userSessions[chatId].state = 'editing_field';
-      userSessions[chatId].editField = `hourlyRate.${level}`;
-      bot.sendMessage(chatId, `Please enter the hourly rate for ${level.charAt(0).toUpperCase() + level.slice(1)}:`, {
-        parse_mode: 'Markdown'
-      });
     }
   } catch (err) {
     console.error('Error handling callback query:', err);
