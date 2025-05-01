@@ -194,68 +194,53 @@ const getTick = (val) => val ? '✔️' : '❌';
 
 function initializeTeachingLevels(tutor) {
   if (!tutor.teachingLevels) {
-    tutor.teachingLevels = {};
-  }
-  
-  const levels = {
-    primary: {
-      english: false,
-      math: false,
-      science: false,
-      chinese: false,
-      malay: false,
-      tamil: false
-    },
-    secondary: {
-      english: false,
-      math: false,
-      aMath: false,
-      eMath: false,
-      physics: false,
-      chemistry: false,
-      biology: false,
-      science: false,
-      history: false,
-      geography: false,
-      literature: false,
-      chinese: false,
-      malay: false,
-      tamil: false
-    },
-    jc: {
-      generalPaper: false,
-      h1Math: false,
-      h2Math: false,
-      h1Physics: false,
-      h2Physics: false,
-      h1Chemistry: false,
-      h2Chemistry: false,
-      h1Biology: false,
-      h2Biology: false,
-      h1Economics: false,
-      h2Economics: false,
-      h1History: false,
-      h2History: false
-    },
-    international: {
-      ib: false,
-      igcse: false,
-      ielts: false,
-      toefl: false
-    }
-  };
-
-  // Initialize any missing levels
-  for (const [level, subjects] of Object.entries(levels)) {
-    if (!tutor.teachingLevels[level]) {
-      tutor.teachingLevels[level] = {};
-    }
-    // Initialize any missing subjects
-    for (const [subject, defaultValue] of Object.entries(subjects)) {
-      if (tutor.teachingLevels[level][subject] === undefined) {
-        tutor.teachingLevels[level][subject] = defaultValue;
+    tutor.teachingLevels = {
+      primary: {
+        english: false,
+        math: false,
+        science: false,
+        chinese: false,
+        malay: false,
+        tamil: false
+      },
+      secondary: {
+        english: false,
+        math: false,
+        aMath: false,
+        eMath: false,
+        physics: false,
+        chemistry: false,
+        biology: false,
+        science: false,
+        history: false,
+        geography: false,
+        literature: false,
+        chinese: false,
+        malay: false,
+        tamil: false
+      },
+      jc: {
+        generalPaper: false,
+        h1Math: false,
+        h2Math: false,
+        h1Physics: false,
+        h2Physics: false,
+        h1Chemistry: false,
+        h2Chemistry: false,
+        h1Biology: false,
+        h2Biology: false,
+        h1Economics: false,
+        h2Economics: false,
+        h1History: false,
+        h2History: false
+      },
+      international: {
+        ib: false,
+        igcse: false,
+        ielts: false,
+        toefl: false
       }
-    }
+    };
   }
 }
 
@@ -520,8 +505,17 @@ function getHighestEducationMenu() {
 
 
 function getTeachingLevelMenu(tutor, level) {
+  // Ensure teachingLevels is properly initialized
+  if (!tutor.teachingLevels || !tutor.teachingLevels[level]) {
+    initializeTeachingLevels(tutor);
+  }
+  
   const subjects = Object.keys(tutor.teachingLevels[level]);
   const keyboard = [];
+  
+  // Debug logging
+  console.log(`Building menu for ${level} with subjects:`, subjects);
+  console.log(`Current teachingLevels[${level}]:`, tutor.teachingLevels[level]);
   
   // Create rows with 2 subjects per row
   for (let i = 0; i < subjects.length; i += 2) {
@@ -529,7 +523,7 @@ function getTeachingLevelMenu(tutor, level) {
     
     // First subject in row
     const subject1 = subjects[i];
-    const isSelected1 = tutor.teachingLevels[level][subject1];
+    const isSelected1 = tutor.teachingLevels[level][subject1] === true;
     const formattedSubject1 = subject1.replace(/([A-Z])/g, ' $1').trim();
     row.push({
       text: `${formattedSubject1} ${isSelected1 ? '✅' : '❌'}`,
@@ -539,7 +533,7 @@ function getTeachingLevelMenu(tutor, level) {
     // Second subject in row (if exists)
     if (i + 1 < subjects.length) {
       const subject2 = subjects[i + 1];
-      const isSelected2 = tutor.teachingLevels[level][subject2];
+      const isSelected2 = tutor.teachingLevels[level][subject2] === true;
       const formattedSubject2 = subject2.replace(/([A-Z])/g, ' $1').trim();
       row.push({
         text: `${formattedSubject2} ${isSelected2 ? '✅' : '❌'}`,
@@ -1603,7 +1597,19 @@ bot.on('callback_query', async (callbackQuery) => {
       const tutor = await Tutor.findById(userSessions[chatId].tutorId);
       
       // Initialize teaching levels if needed
-      initializeTeachingLevels(tutor);
+      if (!tutor.teachingLevels) {
+        initializeTeachingLevels(tutor);
+        await tutor.save();
+      }
+      
+      // Double check the specific level exists
+      if (!tutor.teachingLevels[level]) {
+        initializeTeachingLevels(tutor);
+        await tutor.save();
+      }
+      
+      console.log(`Opening teaching level menu for ${level}`);
+      console.log(`Current teachingLevels:`, tutor.teachingLevels);
       
       const menu = getTeachingLevelMenu(tutor, level);
       bot.sendMessage(chatId, menu.text, {
@@ -1658,10 +1664,21 @@ bot.on('callback_query', async (callbackQuery) => {
       else {
         // Handle teaching level toggle (primary, secondary, etc.)
         // Initialize teaching levels if needed
-        initializeTeachingLevels(tutor);
-
-        const currentValue = tutor.teachingLevels[type][field];
+        if (!tutor.teachingLevels) {
+          initializeTeachingLevels(tutor);
+        }
+        
+        // Make sure the specific level object exists
+        if (!tutor.teachingLevels[type]) {
+          tutor.teachingLevels[type] = {};
+        }
+        
+        // Toggle the boolean value
+        const currentValue = tutor.teachingLevels[type][field] || false;
         tutor.teachingLevels[type][field] = !currentValue;
+        
+        console.log(`Toggling ${type}.${field} from ${currentValue} to ${!currentValue}`);
+        
         await tutor.save();
 
         const updatedMenu = getTeachingLevelMenu(tutor, type);
@@ -1714,11 +1731,38 @@ bot.on('callback_query', async (callbackQuery) => {
       const menu = getHourlyRateMenu(tutor);
       bot.sendMessage(chatId, menu.text, menu.options);
     }
+    else if (data === 'edit_hourlyRate') {
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      if (!tutor.hourlyRate) {
+        tutor.hourlyRate = {
+          primary: '',
+          secondary: '',
+          jc: '',
+          international: ''
+        };
+      }
+      const menu = getHourlyRateMenu(tutor);
+      bot.sendMessage(chatId, menu.text, menu.options);
+    }
     else if (data.startsWith('edit_hourlyRate_')) {
       const level = data.split('_')[2];
       userSessions[chatId].state = 'editing_field';
       userSessions[chatId].editField = `hourlyRate.${level}`;
-      bot.sendMessage(chatId, `Please enter the hourly rate for ${level.charAt(0).toUpperCase() + level.slice(1)}:`, {
+      
+      // Make sure tutor has hourlyRate initialized
+      const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      if (!tutor.hourlyRate) {
+        tutor.hourlyRate = {
+          primary: '',
+          secondary: '',
+          jc: '',
+          international: ''
+        };
+        await tutor.save();
+      }
+      
+      const displayLevel = level === 'jc' ? 'JC' : level.charAt(0).toUpperCase() + level.slice(1);
+      bot.sendMessage(chatId, `Please enter the hourly rate for ${displayLevel}:`, {
         parse_mode: 'HTML'
       });
     }
@@ -2360,31 +2404,50 @@ bot.on('message', async (msg) => {
   if (userSessions[chatId]?.state === 'editing_field') {
     const field = userSessions[chatId].editField;
     try {
-      // Handle nested fields (like hourlyRate.primary)
-      if (field.includes('.')) {
-        const [parent, child] = field.split('.');
+      // Handle different editing states
+      if (userSessions[chatId].state === 'editing_field') {
+        const field = userSessions[chatId].editField;
         const tutor = await Tutor.findById(userSessions[chatId].tutorId);
-        if (!tutor[parent]) {
-          tutor[parent] = {};
+        
+        // Handle nested fields like hourlyRate.primary
+        if (field.includes('.')) {
+          const [parent, child] = field.split('.');
+          if (!tutor[parent]) {
+            tutor[parent] = {};
+          }
+          
+          // Make sure hourlyRate object exists
+          if (parent === 'hourlyRate' && !tutor.hourlyRate) {
+            tutor.hourlyRate = {
+              primary: '',
+              secondary: '',
+              jc: '',
+              international: ''
+            };
+          }
+          
+          tutor[parent][child] = text;
+          console.log(`Updated ${parent}.${child} to ${text}`);
+        } else {
+          tutor[field] = text;
         }
-        tutor[parent][child] = text;
+        
         await tutor.save();
-      } else {
-        await Tutor.findByIdAndUpdate(userSessions[chatId].tutorId, { [field]: text });
+        
+        // Format field name for display
+        const fieldLabel = field.replace(/\./g, ' ').replace(/([A-Z])/g, ' $1').trim();
+        
+        bot.sendMessage(chatId, `✅ Your ${fieldLabel} has been updated.`, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[{ text: '⬅️ Back to Profile Menu', callback_data: 'profile_edit' }]]
+          }
+        });
+        
+        // Reset state
+        userSessions[chatId].state = 'idle';
+        userSessions[chatId].editField = null;
       }
-      
-      userSessions[chatId].state = 'main_menu';
-      delete userSessions[chatId].editField;
-
-      bot.sendMessage(chatId, `✅ *${field.replace(/([A-Z])/g, ' $1').replace(/\./g, ' ').trim()}* has been updated successfully.`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Back to Profile Menu', callback_data: 'profile_edit' }],
-            [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
-          ]
-        }
-      });
     } catch (err) {
       console.error(`Error updating ${field}:`, err);
       bot.sendMessage(chatId, 'There was an error updating your profile. Please try again later.');
