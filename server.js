@@ -173,8 +173,8 @@ app.use(express.json());
 const bot = new TelegramBot(process.env.BOT_TOKEN);
 
 // Set webhook URL (this will run when the server starts)
-const url = process.env.RENDER_EXTERNAL_URL || 'https://your-service-name.onrender.com';
-bot.setWebHook(`${url}/bot${process.env.BOT_TOKEN}`);
+const webhookUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}/bot${process.env.BOT_TOKEN}` : process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/bot${process.env.BOT_TOKEN}` : `https://your-service-name.onrender.com/bot${process.env.BOT_TOKEN}`;
+bot.setWebHook(webhookUrl);
 
 // Handle webhook endpoint
 app.post(`/bot${process.env.BOT_TOKEN}`, (req, res) => {
@@ -2484,3 +2484,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Bot server is running on port ${PORT}`);
 });
+
+module.exports = app;
