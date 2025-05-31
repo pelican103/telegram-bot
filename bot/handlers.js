@@ -22,7 +22,13 @@ import {
   
   function safeSend(bot, chatId, text, options = {}) {
     console.log(`📤 Attempting to send message to ${chatId}:`, text.substring(0, 50) + '...');
-    return bot.sendMessage(chatId, text, options)
+    
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Send message timeout after 10 seconds')), 10000);
+    });
+    
+    const sendPromise = bot.sendMessage(chatId, text, options)
       .then(result => {
         console.log(`✅ Message sent successfully to ${chatId}`);
         return result;
@@ -30,8 +36,10 @@ import {
       .catch(err => {
         console.error(`❌ Failed to send message to ${chatId}:`, err.message);
         console.error(`❌ Full error:`, err);
-        throw err; // Re-throw to see the error in the main handler
+        throw err;
       });
+    
+    return Promise.race([sendPromise, timeoutPromise]);
   }
   
   function safeAnswer(bot, queryId, options = {}) {
