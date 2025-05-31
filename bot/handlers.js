@@ -1,4 +1,4 @@
-// handlers.js (adds 1s delay + timestamped message in contact handler)
+// handlers.js (refactored to expose handleUpdate for manual webhook dispatch)
 
 import {
     normalizePhone,
@@ -26,80 +26,49 @@ import {
       console.log(`📦 Reply markup:`, JSON.stringify(options.reply_markup));
     }
   
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        console.error(`⏱️ Timeout: sendMessage to ${chatId} took more than 10s`);
-        reject(new Error('Send message timeout after 10 seconds'));
-      }, 10000);
-    });
-  
-    const sendPromise = bot.sendMessage(chatId, text, options)
+    return bot.sendMessage(chatId, text, options)
       .then(result => {
         console.log(`✅ Message sent successfully to ${chatId}`);
         return result;
       })
       .catch(err => {
         console.error(`❌ Failed to send message to ${chatId}:`, err.message);
-        console.error(`❌ Full error:`, err);
         throw err;
       });
-  
-    return Promise.race([sendPromise, timeoutPromise]);
   }
   
-  function safeAnswer(bot, queryId, options = {}) {
-    return bot.answerCallbackQuery(queryId, options).catch(err => {
-      console.error(`❌ Failed to answer callback query:`, err.message);
-    });
-  }
-  
-  export default function registerHandlers(bot, context) {
+  export function handleUpdate(bot, context, update) {
     const {
       Tutor,
-      Assignment,
-      userSessions,
-      adminPostingSessions,
-      ADMIN_USERS,
-      CHANNEL_ID
+      userSessions
     } = context;
   
-    console.log('🔧 Registering bot handlers...');
+    if (update.message?.text === '/start') {
+      const chatId = update.message.chat.id;
+      userSessions[chatId] = { state: 'awaiting_contact' };
+      return safeSend(bot, chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
+        reply_markup: {
+          keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
+          one_time_keyboard: true,
+        },
+      });
+    }
   
-    bot.onText(/^\/start(?:\s+apply_(\w+))?/, async (msg, match) => {
-      const chatId = msg.chat.id;
-      const assignmentId = match[1];
-  
-      try {
-        userSessions[chatId] = { state: 'awaiting_contact', assignmentId };
-        await safeSend(bot, chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
-          reply_markup: {
-            keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-            one_time_keyboard: true,
-          },
-        });
-      } catch (error) {
-        console.error('❌ Error in /start handler:', error);
-        await safeSend(bot, chatId, 'Sorry, there was an error. Please try again.');
-      }
-    });
-  
-    bot.on('contact', async (msg) => {
+    if (update.message?.contact) {
+      const msg = update.message;
       const chatId = msg.chat.id;
       console.log('📞 Contact received from:', msg.from.id);
       console.log('📞 Contact object:', msg.contact);
-  
       console.log('👤 contact.user_id:', msg.contact.user_id);
       console.log('👤 msg.from.id:', msg.from.id);
   
-      try {
-        const contactNumber = msg.contact.phone_number;
-        const variations = normalizePhone(contactNumber);
-        console.log('🔎 Phone search variations:', variations);
+      const contactNumber = msg.contact.phone_number;
+      const variations = normalizePhone(contactNumber);
+      console.log('🔎 Phone search variations:', variations);
   
-        const tutor = await Tutor.findOne({
-          $or: variations.map(v => ({ contactNumber: { $regex: new RegExp(v, 'i') } }))
-        });
-  
+      return Tutor.findOne({
+        $or: variations.map(v => ({ contactNumber: { $regex: new RegExp(v, 'i') } }))
+      }).then(tutor => {
         if (!tutor) {
           return safeSend(bot, chatId, 'Sorry, we could not find your registration. Would you like to register as a tutor?', {
             reply_markup: {
@@ -111,31 +80,34 @@ import {
           });
         }
   
+        console.log('✅ Tutor found:', tutor._id);
         userSessions[chatId] = {
           state: 'verified',
-          tutorId: tutor._id,
-          assignmentId: userSessions[chatId]?.assignmentId
+          tutorId: tutor._id
         };
   
-        console.log('✅ Tutor found:', tutor._id);
-        console.log('📨 About to send test message to:', chatId);
-        console.log('📨 Session state:', userSessions[chatId]);
+        const profileText = formatTutorProfile(tutor);
+        return safeSend(bot, chatId, profileText, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: 'Yes, use this profile', callback_data: 'profile_confirm' }],
+              [{ text: 'No, I want to edit it', callback_data: 'profile_edit' }],
+              [{ text: 'Back', callback_data: 'start' }]
+            ]
+          }
+        });
+      }).catch(err => {
+        console.error('❌ Error in contact flow:', err);
+        return safeSend(bot, chatId, '⚠️ Something went wrong. Please try again later.');
+      });
+    }
   
-        try {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // wait 1 second
-          const timestamp = new Date().toISOString();
-          await bot.sendMessage(chatId, `🧪 Timestamped test after contact: ${timestamp}`);
-          console.log('✅ Timestamped test message sent after contact');
-        } catch (e) {
-          console.error('❌ Failed to send timestamped message:', e);
-          await safeSend(bot, chatId, '⚠️ Error sending confirmation message.');
-        }
-      } catch (error) {
-        console.error('❌ Error in contact handler:', error);
-        await safeSend(bot, chatId, 'Sorry, there was an error verifying your profile.');
-      }
-    });
+    console.log('ℹ️ No matching update handler for:', update);
+    return Promise.resolve();
+  }
   
-    console.log('✅ All bot handlers registered successfully');
+  export default function registerHandlers(bot, context) {
+    console.log('🔧 Bot handlers are set up (manual dispatch mode)');
   }
   

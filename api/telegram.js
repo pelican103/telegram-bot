@@ -2,7 +2,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import mongoose from 'mongoose';
 import Tutor from '../models/Tutor.js';
 import Assignment from '../models/Assignment.js';
-import registerHandlers from '../bot/handlers.js';
+import { handleUpdate } from '../bot/handlers.js';
 
 let bot = null;
 let isConnected = false;
@@ -25,14 +25,6 @@ function getBot() {
     console.log('🤖 Initializing Telegram bot...');
     bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
     console.log('📛 Using bot token starts with:', process.env.BOT_TOKEN?.slice(0, 8));
-    registerHandlers(bot, {
-      Tutor,
-      Assignment,
-      userSessions,
-      ADMIN_USERS,
-      adminPostingSessions,
-      CHANNEL_ID
-    });
     console.log('🤖 Bot initialized successfully');
   }
   return bot;
@@ -51,8 +43,16 @@ export default async function handler(req, res) {
     console.log('📩 Incoming Telegram POST update');
     await connectToDatabase();
     const botInstance = getBot();
-    await botInstance.processUpdate(req.body);
-    console.log('✅ Telegram update processed successfully');
+
+    await handleUpdate(botInstance, {
+      Tutor,
+      Assignment,
+      userSessions,
+      adminPostingSessions,
+      ADMIN_USERS,
+      CHANNEL_ID
+    }, req.body);
+
     res.status(200).send('OK');
   } catch (error) {
     console.error('❌ Telegram bot error:', error);
