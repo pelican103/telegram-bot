@@ -84,44 +84,25 @@ function getBot() {
 
 // Main serverless endpoint
 export default async function handler(req, res) {
-  console.log(`📡 ${req.method} request received`);
-  
-  if (req.method === 'GET') {
-    return res.status(200).send('✅ Telegram bot endpoint is deployed.');
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(404).send('Not found');
-  }
-
-  try {
-    // Log all incoming updates when debug is enabled
-    if (process.env.DEBUG === 'true') {
-      console.log("📩 Incoming Telegram update:", JSON.stringify(req.body, null, 2));
-    } else {
-      // Always log the update type for debugging
-      const updateType = Object.keys(req.body).filter(key => key !== 'update_id')[0];
-      console.log(`📩 Telegram update type: ${updateType}`);
+    if (req.method === 'GET') {
+      return res.status(200).send('✅ Telegram bot endpoint is deployed.');
     }
-
-    await connectToDatabase();
-    const botInstance = getBot();
-
-    // Process the update
-    console.log('🔄 Processing update...');
-    
-    // Don't await the processUpdate to avoid Vercel timeout
-    botInstance.processUpdate(req.body).then(() => {
-      console.log('✅ Update processed successfully');
-    }).catch(error => {
-      console.error('❌ Error processing update:', error);
-    });
-    
-    // Respond immediately to Telegram
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error('❌ Telegram bot error:', error);
-    console.error('Error stack:', error.stack);
-    res.status(500).send('Internal Server Error');
+  
+    if (req.method !== 'POST') {
+      return res.status(404).send('Not found');
+    }
+  
+    try {
+      await connectToDatabase();
+      const botInstance = getBot();
+  
+      // THIS MUST BE AWAITED DIRECTLY
+      await botInstance.processUpdate(req.body);
+  
+      return res.status(200).send('OK');
+    } catch (error) {
+      console.error('❌ Telegram bot error:', error);
+      return res.status(500).send('Internal Server Error');
+    }
   }
-}
+  
