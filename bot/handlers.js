@@ -21,9 +21,17 @@ import {
   } from '../utils/menus.js';
   
   function safeSend(bot, chatId, text, options = {}) {
-    return bot.sendMessage(chatId, text, options).catch(err => {
-      console.error(`❌ Failed to send message to ${chatId}:`, err.message);
-    });
+    console.log(`📤 Attempting to send message to ${chatId}:`, text.substring(0, 50) + '...');
+    return bot.sendMessage(chatId, text, options)
+      .then(result => {
+        console.log(`✅ Message sent successfully to ${chatId}`);
+        return result;
+      })
+      .catch(err => {
+        console.error(`❌ Failed to send message to ${chatId}:`, err.message);
+        console.error(`❌ Full error:`, err);
+        throw err; // Re-throw to see the error in the main handler
+      });
   }
   
   function safeAnswer(bot, queryId, options = {}) {
@@ -51,16 +59,26 @@ import {
       const assignmentId = match[1];
       
       try {
+        console.log('💾 Setting user session for:', chatId);
         userSessions[chatId] = { state: 'awaiting_contact', assignmentId };
+        
+        console.log('📤 Sending welcome message...');
         await safeSend(bot, chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
           reply_markup: {
             keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
             one_time_keyboard: true,
           },
         });
-        console.log('✅ Welcome message sent');
+        console.log('✅ Welcome message sent successfully');
       } catch (error) {
         console.error('❌ Error in /start handler:', error);
+        console.error('❌ Error details:', error.message);
+        // Try to send a simple error message
+        try {
+          await bot.sendMessage(chatId, 'Sorry, there was an error. Please try again.');
+        } catch (sendError) {
+          console.error('❌ Could not send error message:', sendError.message);
+        }
       }
     });
   
