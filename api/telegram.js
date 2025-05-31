@@ -1,5 +1,3 @@
-// api/telegram.js — safe Vercel-compatible version (with extra logging)
-
 import TelegramBot from 'node-telegram-bot-api';
 import mongoose from 'mongoose';
 import Tutor from '../models/Tutor.js';
@@ -11,44 +9,31 @@ let isConnected = false;
 
 const userSessions = {};
 const adminPostingSessions = {};
-const ADMIN_USERS = process.env.ADMIN_USERS ? process.env.ADMIN_USERS.split(',').map(u => u.trim()) : [];
+const ADMIN_USERS = process.env.ADMIN_USERS ? process.env.ADMIN_USERS.split(',') : [];
 const CHANNEL_ID = process.env.CHANNEL_ID;
 
 async function connectToDatabase() {
   if (!isConnected) {
-    try {
-      await mongoose.connect(process.env.MONGODB_URI);
-      isConnected = true;
-      console.log('✅ MongoDB connected (Vercel)');
-    } catch (err) {
-      console.error('❌ MongoDB connection failed:', err);
-      throw err;
-    }
+    await mongoose.connect(process.env.MONGODB_URI);
+    isConnected = true;
+    console.log('✅ MongoDB connected (Vercel)');
   }
 }
 
 function getBot() {
   if (!bot) {
-    try {
-      console.log('🤖 Initializing Telegram bot...');
-      console.log('📛 Using bot token starts with:', process.env.BOT_TOKEN?.slice(0, 8));
-
-      bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
-
-      registerHandlers(bot, {
-        Tutor,
-        Assignment,
-        userSessions,
-        adminPostingSessions,
-        ADMIN_USERS,
-        CHANNEL_ID,
-      });
-
-      console.log('🤖 Bot initialized successfully');
-    } catch (err) {
-      console.error('❌ Error initializing bot:', err);
-      throw err;
-    }
+    console.log('🤖 Initializing Telegram bot...');
+    bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
+    console.log('📛 Using bot token starts with:', process.env.BOT_TOKEN?.slice(0, 8));
+    registerHandlers(bot, {
+      Tutor,
+      Assignment,
+      userSessions,
+      ADMIN_USERS,
+      adminPostingSessions,
+      CHANNEL_ID
+    });
+    console.log('🤖 Bot initialized successfully');
   }
   return bot;
 }
@@ -66,21 +51,11 @@ export default async function handler(req, res) {
     console.log('📩 Incoming Telegram POST update');
     await connectToDatabase();
     const botInstance = getBot();
-
-    // Respond to Telegram immediately
+    await botInstance.processUpdate(req.body);
+    console.log('✅ Telegram update processed successfully');
     res.status(200).send('OK');
-
-    // Process update after responding
-    try {
-      await botInstance.processUpdate(req.body);
-      console.log('✅ Telegram update processed successfully');
-    } catch (updateError) {
-      console.error('❌ Error while processing Telegram update:', updateError);
-    }
   } catch (error) {
-    console.error('❌ Telegram bot handler error:', error);
-    if (!res.headersSent) {
-      res.status(500).send('Internal Server Error');
-    }
+    console.error('❌ Telegram bot error:', error);
+    res.status(500).send('Internal Server Error');
   }
 }
