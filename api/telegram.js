@@ -1,4 +1,4 @@
-// api/telegram.js — safe Vercel-compatible version
+// api/telegram.js — safe Vercel-compatible version (with extra logging)
 
 import TelegramBot from 'node-telegram-bot-api';
 import mongoose from 'mongoose';
@@ -16,27 +16,39 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 
 async function connectToDatabase() {
   if (!isConnected) {
-    await mongoose.connect(process.env.MONGODB_URI);
-    isConnected = true;
-    console.log('✅ MongoDB connected (Vercel)');
+    try {
+      await mongoose.connect(process.env.MONGODB_URI);
+      isConnected = true;
+      console.log('✅ MongoDB connected (Vercel)');
+    } catch (err) {
+      console.error('❌ MongoDB connection failed:', err);
+      throw err;
+    }
   }
 }
 
 function getBot() {
   if (!bot) {
-    console.log('🤖 Initializing Telegram bot...');
-    bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
+    try {
+      console.log('🤖 Initializing Telegram bot...');
+      console.log('📛 Using bot token starts with:', process.env.BOT_TOKEN?.slice(0, 8));
 
-    registerHandlers(bot, {
-      Tutor,
-      Assignment,
-      userSessions,
-      adminPostingSessions,
-      ADMIN_USERS,
-      CHANNEL_ID,
-    });
+      bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
 
-    console.log('🤖 Bot initialized successfully');
+      registerHandlers(bot, {
+        Tutor,
+        Assignment,
+        userSessions,
+        adminPostingSessions,
+        ADMIN_USERS,
+        CHANNEL_ID,
+      });
+
+      console.log('🤖 Bot initialized successfully');
+    } catch (err) {
+      console.error('❌ Error initializing bot:', err);
+      throw err;
+    }
   }
   return bot;
 }
@@ -51,16 +63,22 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('📩 Incoming Telegram POST update');
     await connectToDatabase();
     const botInstance = getBot();
 
     // Respond to Telegram immediately
     res.status(200).send('OK');
 
-    // Process update after response (fire-and-forget style)
-    await botInstance.processUpdate(req.body);
+    // Process update after responding
+    try {
+      await botInstance.processUpdate(req.body);
+      console.log('✅ Telegram update processed successfully');
+    } catch (updateError) {
+      console.error('❌ Error while processing Telegram update:', updateError);
+    }
   } catch (error) {
-    console.error('❌ Telegram bot error:', error);
+    console.error('❌ Telegram bot handler error:', error);
     if (!res.headersSent) {
       res.status(500).send('Internal Server Error');
     }
