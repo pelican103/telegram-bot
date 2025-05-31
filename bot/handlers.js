@@ -1,4 +1,4 @@
-// handlers.js (adds identity check logs and hardcoded message test)
+// handlers.js (adds 1s delay + timestamped message in contact handler)
 
 import {
     normalizePhone,
@@ -122,11 +122,12 @@ import {
         console.log('📨 Session state:', userSessions[chatId]);
   
         try {
-          // Hardcoded minimal message for verification
-          await bot.sendMessage(812379368, '🧪 Manual test message inside contact handler');
-          console.log('✅ Manual test message sent after contact');
+          await new Promise(resolve => setTimeout(resolve, 1000)); // wait 1 second
+          const timestamp = new Date().toISOString();
+          await bot.sendMessage(chatId, `🧪 Timestamped test after contact: ${timestamp}`);
+          console.log('✅ Timestamped test message sent after contact');
         } catch (e) {
-          console.error('❌ Failed to send hardcoded message:', e);
+          console.error('❌ Failed to send timestamped message:', e);
           await safeSend(bot, chatId, '⚠️ Error sending confirmation message.');
         }
       } catch (error) {
