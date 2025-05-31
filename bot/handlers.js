@@ -1,4 +1,4 @@
-// handlers.js (debugging contact flow with minimal message for Markdown isolation)
+// handlers.js (adds identity check logs and hardcoded message test)
 
 import {
     normalizePhone,
@@ -88,6 +88,9 @@ import {
       console.log('📞 Contact received from:', msg.from.id);
       console.log('📞 Contact object:', msg.contact);
   
+      console.log('👤 contact.user_id:', msg.contact.user_id);
+      console.log('👤 msg.from.id:', msg.from.id);
+  
       try {
         const contactNumber = msg.contact.phone_number;
         const variations = normalizePhone(contactNumber);
@@ -115,14 +118,15 @@ import {
         };
   
         console.log('✅ Tutor found:', tutor._id);
+        console.log('📨 About to send test message to:', chatId);
+        console.log('📨 Session state:', userSessions[chatId]);
   
         try {
-          // Instead of profileText, send a basic confirmation message to test message delivery
-          await safeSend(bot, chatId, '✅ Tutor matched. We will now test Markdown later.', {
-            // Temporarily remove parse_mode and markup to isolate failure
-          });
+          // Hardcoded minimal message for verification
+          await bot.sendMessage(812379368, '🧪 Manual test message inside contact handler');
+          console.log('✅ Manual test message sent after contact');
         } catch (e) {
-          console.error('❌ Failed to send minimal contact response:', e);
+          console.error('❌ Failed to send hardcoded message:', e);
           await safeSend(bot, chatId, '⚠️ Error sending confirmation message.');
         }
       } catch (error) {
@@ -133,3 +137,4 @@ import {
   
     console.log('✅ All bot handlers registered successfully');
   }
+  
