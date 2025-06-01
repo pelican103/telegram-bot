@@ -1,4 +1,4 @@
-// handlers.js - Enhanced bot functionality with comprehensive submenus
+// handlers.js - Enhanced bot functionality with admin assignment posting
 
 function normalizePhone(phone) {
   const cleaned = phone.replace(/\D/g, '');
@@ -103,14 +103,37 @@ function formatAssignment(assignment) {
   msg += `*Location:* ${assignment.location}\n`;
   msg += `*Rate:* $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
   msg += `*Students:* ${assignment.studentCount || 1}\n`;
-  msg += `*Frequency:* ${assignment.frequency}/week\n`;
+  msg += `*Frequency:* ${assignment.frequency}\n`;
   msg += `*Duration:* ${assignment.duration}\n`;
+  msg += `*Start Date:* ${assignment.startDate}\n`;
   
   if (assignment.description) {
     msg += `\n*Description:* ${assignment.description}\n`;
   }
   
   msg += `\n*Status:* ${assignment.status}`;
+  return msg;
+}
+
+// Format assignment for channel posting
+function formatAssignmentForChannel(assignment, botUsername) {
+  let msg = `🎯 *NEW TUTORING ASSIGNMENT*\n\n`;
+  msg += `📚 *Level:* ${assignment.level}\n`;
+  msg += `📖 *Subject:* ${assignment.subject}\n`;
+  msg += `📍 *Location:* ${assignment.location}\n`;
+  msg += `💰 *Rate:* $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
+  msg += `👥 *Students:* ${assignment.studentCount || 1}\n`;
+  msg += `📅 *Frequency:* ${assignment.frequency}\n`;
+  msg += `⏱️ *Duration:* ${assignment.duration}\n`;
+  msg += `🚀 *Start Date:* ${assignment.startDate}\n`;
+  
+  if (assignment.description) {
+    msg += `\n📝 *Description:* ${assignment.description}\n`;
+  }
+  
+  msg += `\n💼 *Status:* ${assignment.status}`;
+  msg += `\n\n👆 *Click below to apply for this assignment!*`;
+  
   return msg;
 }
 
@@ -387,14 +410,39 @@ function safeSend(bot, chatId, text, options = {}) {
     });
 }
 
+// Check if user is admin
+function isAdmin(userId, ADMIN_USERS) {
+  return ADMIN_USERS && ADMIN_USERS.includes(userId.toString());
+}
+
 // Main menu function
-function showMainMenu(chatId, bot) {
+function showMainMenu(chatId, bot, userId, ADMIN_USERS) {
+  const isUserAdmin = isAdmin(userId, ADMIN_USERS);
+  
+  const keyboard = [
+    [{ text: '📋 View Available Assignments', callback_data: 'view_assignments' }],
+    [{ text: '📝 My Applications', callback_data: 'view_applications' }],
+    [{ text: '👤 Update Profile', callback_data: 'profile_edit' }]
+  ];
+
+  if (isUserAdmin) {
+    keyboard.push([{ text: '⚙️ Admin Panel', callback_data: 'admin_panel' }]);
+  }
+
   return safeSend(bot, chatId, 'Main Menu - What would you like to do?', {
+    reply_markup: { inline_keyboard: keyboard }
+  });
+}
+
+// Admin panel menu
+function showAdminPanel(chatId, bot) {
+  return safeSend(bot, chatId, '⚙️ Admin Panel - What would you like to do?', {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '📋 View Available Assignments', callback_data: 'view_assignments' }],
-        [{ text: '📝 My Applications', callback_data: 'view_applications' }],
-        [{ text: '👤 Update Profile', callback_data: 'profile_edit' }]
+        [{ text: '🎯 Post New Assignment', callback_data: 'admin_post_assignment' }],
+        [{ text: '📊 View All Applications', callback_data: 'admin_view_all_applications' }],
+        [{ text: '📋 Manage Assignments', callback_data: 'admin_manage_assignments' }],
+        [{ text: '🔙 Back to Main Menu', callback_data: 'main_menu' }]
       ]
     }
   });
@@ -541,608 +589,534 @@ async function showApplications(chatId, bot, Assignment, userSessions, page = 1)
   }
 }
 
-// Main handler function
-export async function handleUpdate(bot, context, update) {
-  const { Tutor, Assignment, userSessions, ADMIN_USERS } = context;
-
-  // Handle /start command
-  if (update.message?.text === '/start') {
-    const chatId = update.message.chat.id;
-    console.log(`🚀 Start command received from ${chatId}`);
-    userSessions[chatId] = { state: 'awaiting_contact' };
-    return safeSend(bot, chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
-      reply_markup: {
-        keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-        one_time_keyboard: true,
-      },
-    });
+// Parse assignment input from admin
+function parseAssignmentInput(text) {
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+  const assignment = {
+    status: 'Open' // Default status
+  };
+  
+  for (const line of lines) {
+    const [key, ...valueParts] = line.split(':');
+    const value = valueParts.join(':').trim();
+    
+    if (!key || !value) continue;
+    
+    const cleanKey = key.toLowerCase().trim();
+    
+    switch (cleanKey) {
+      case 'assignment':
+      case 'title':
+        assignment.title = value;
+        break;
+      case 'level':
+        assignment.level = value;
+        break;
+      case 'subject':
+        assignment.subject = value;
+        break;
+      case 'location':
+        assignment.location = value;
+        break;
+      case 'rate':
+        // Extract rate and rate type
+        const rateMatch = value.match(/(\d+)(?:\/(\w+))?/);
+        if (rateMatch) {
+          assignment.rate = parseFloat(rateMatch[1]);
+          assignment.rateType = rateMatch[2] || 'hour';
+        }
+        break;
+      case 'frequency':
+        assignment.frequency = value;
+        break;
+      case 'start date':
+      case 'startdate':
+        assignment.startDate = value;
+        break;
+      case 'description':
+        assignment.description = value;
+        break;
+      case 'duration':
+        assignment.duration = value;
+        break;
+      case 'students':
+      case 'student count':
+        assignment.studentCount = parseInt(value) || 1;
+        break;
+      case 'status':
+        assignment.status = value;
+        break;
+    }
   }
+  
+  return assignment;
+}
 
-  // Handle contact sharing
-  if (update.message?.contact) {
-    const msg = update.message;
-    const chatId = msg.chat.id;
-    console.log('📞 Contact received from:', msg.from.id);
-    console.log('📞 Contact details:', msg.contact);
+// Post assignment to channel
+async function postAssignmentToChannel(bot, assignment, channelId, botUsername) {
+  try {
+    const message = formatAssignmentForChannel(assignment, botUsername);
+    
+    const keyboard = {
+      inline_keyboard: [
+        [{
+          text: '✅ Apply for this Assignment',
+          url: `https://t.me/${botUsername}?start=apply_${assignment._id}`
+        }]
+      ]
+    };
+    
+    await bot.sendMessage(channelId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+    
+    console.log(`✅ Assignment ${assignment._id} posted to channel ${channelId}`);
+  } catch (error) {
+    console.error('Error posting assignment to channel:', error);
+    throw error;
+  }
+}
 
-    const contactNumber = msg.contact.phone_number;
-    const variations = normalizePhone(contactNumber);
-    console.log('🔎 Phone search variations:', variations);
-
-    try {
-      const tutor = await Tutor.findOne({
-        $or: variations.map(v => ({ contactNumber: { $regex: new RegExp(v, 'i') } }))
+async function showAllApplications(chatId, bot, Assignment, page = 1) {
+  try {
+    const assignments = await Assignment.find({})
+      .populate('applicants.tutorId', 'fullName contactNumber email')
+      .sort({ createdAt: -1 });
+    
+    if (assignments.length === 0) {
+      return safeSend(bot, chatId, 'No assignments found.', {
+        reply_markup: {
+          inline_keyboard: [[{ text: 'Back to Admin Panel', callback_data: 'admin_panel' }]]
+        }
       });
-
-      if (!tutor) {
-        console.log('❌ Tutor not found for variations:', variations);
-        return safeSend(bot, chatId, 'Sorry, we could not find your registration. Would you like to register as a tutor?', {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Register Now', url: 'https://www.lioncitytutors.com/register-tutor' }],
-              [{ text: 'Try Another Number', callback_data: 'start' }]
-            ]
-          }
-        });
-      }
-
-      console.log('✅ Tutor found:', tutor._id);
-      const pendingAssignmentId = userSessions[chatId]?.pendingAssignmentId;
-      userSessions[chatId] = {
-        tutorId: tutor._id,
-        state: 'profile_verification'
-      };
+    }
+    
+    const totalPages = Math.ceil(assignments.length / ITEMS_PER_PAGE) || 1;
+    page = Math.max(1, Math.min(page, totalPages));
+    
+    const pageAssignments = assignments.slice(
+      (page - 1) * ITEMS_PER_PAGE,
+      page * ITEMS_PER_PAGE
+    );
+    
+    await safeSend(bot, chatId, `📊 All Applications (Page ${page} of ${totalPages})`);
+    
+    for (const assignment of pageAssignments) {
+      const applicantCount = assignment.applicants?.length || 0;
+      let msg = formatAssignment(assignment);
+      msg += `\n\n👥 *Total Applicants:* ${applicantCount}`;
       
-      if (pendingAssignmentId) {
-        userSessions[chatId].pendingAssignmentId = pendingAssignmentId;
+      const keyboard = [
+        [{ text: `📋 View Applications (${applicantCount})`, callback_data: `admin_view_assignment_${assignment._id}` }]
+      ];
+      
+      if (assignment.status === 'Open') {
+        keyboard.push([{ text: '🔒 Close Assignment', callback_data: `admin_close_${assignment._id}` }]);
+      } else {
+        keyboard.push([{ text: '🔓 Reopen Assignment', callback_data: `admin_reopen_${assignment._id}` }]);
       }
-
-      const profileMessage = formatTutorProfile(tutor);
-      return safeSend(bot, chatId, profileMessage, {
+      
+      await safeSend(bot, chatId, msg, {
         parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    }
+    
+    const paginationKeyboard = [];
+    if (page > 1) {
+      paginationKeyboard.push({ text: '◀️ Previous', callback_data: `admin_all_apps_page_${page - 1}` });
+    }
+    if (page < totalPages) {
+      paginationKeyboard.push({ text: 'Next ▶️', callback_data: `admin_all_apps_page_${page + 1}` });
+    }
+    
+    await safeSend(bot, chatId, `Page ${page} of ${totalPages}`, {
+      reply_markup: {
+        inline_keyboard: [
+          paginationKeyboard,
+          [{ text: 'Back to Admin Panel', callback_data: 'admin_panel' }]
+        ]
+      }
+    });
+  } catch (err) {
+    console.error('Error showing all applications:', err);
+    safeSend(bot, chatId, 'There was an error retrieving applications. Please try again later.');
+  }
+}
+
+// Show applications for a specific assignment (admin view)
+async function showAssignmentApplications(chatId, bot, Assignment, assignmentId) {
+  try {
+    const assignment = await Assignment.findById(assignmentId)
+      .populate('applicants.tutorId', 'fullName contactNumber email gender race highestEducation');
+    
+    if (!assignment) {
+      return safeSend(bot, chatId, 'Assignment not found.');
+    }
+    
+    let msg = formatAssignment(assignment);
+    msg += `\n\n👥 *Total Applicants:* ${assignment.applicants?.length || 0}`;
+    
+    await safeSend(bot, chatId, msg, { parse_mode: 'Markdown' });
+    
+    if (!assignment.applicants || assignment.applicants.length === 0) {
+      return safeSend(bot, chatId, 'No applications for this assignment yet.', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: 'Yes, use this profile', callback_data: 'profile_confirm' }],
-            [{ text: 'No, I would like to edit this profile', callback_data: 'profile_edit' }],
-            [{ text: 'Back', callback_data: 'start' }]
+            [{ text: 'Back to All Applications', callback_data: 'admin_view_all_applications' }]
           ]
         }
       });
-    } catch (err) {
-      console.error('Error finding tutor:', err);
-      return safeSend(bot, chatId, 'There was an error processing your request. Please try again later.');
     }
-  }
-
-  // Handle text messages for profile editing
-  if (update.message?.text && userSessions[update.message.chat.id]?.state?.startsWith('awaiting_')) {
-    const chatId = update.message.chat.id;
-    const session = userSessions[chatId];
-    const text = update.message.text;
-
-    try {
-      const tutor = await Tutor.findById(session.tutorId);
-      if (!tutor) {
-        return safeSend(bot, chatId, 'Tutor not found. Please try again with /start.');
-      }
-
-      const field = session.state.replace('awaiting_', '');
-      
-      // Handle different field types
-      if (field.startsWith('rate_')) {
-        const level = field.replace('rate_', '');
-        if (!tutor.hourlyRate) tutor.hourlyRate = {};
-        tutor.hourlyRate[level] = text;
-        await tutor.save();
-        
-        session.state = 'main_menu';
-        await safeSend(bot, chatId, `✅ ${level} rate updated to $${text}!`);
-        
-        return safeSend(bot, chatId, 'Select rate to edit:', {
-          reply_markup: getHourlyRatesMenu(tutor)
-        });
-      } else {
-        // Regular field update
-        tutor[field] = text;
-        await tutor.save();
-        
-        session.state = 'main_menu';
-        await safeSend(bot, chatId, `✅ ${field} updated successfully!`);
-        
-        return safeSend(bot, chatId, 'Select field to edit:', {
-          reply_markup: getPersonalInfoMenu(tutor)
-        });
-      }
-    } catch (err) {
-      console.error('Error updating profile:', err);
-      return safeSend(bot, chatId, 'There was an error updating your profile. Please try again.');
-    }
-  }
-
-  // Handle callback queries
-  if (update.callback_query) {
-    const query = update.callback_query;
-    const chatId = query.message.chat.id;
-    const data = query.data;
-    const messageId = query.message.message_id;
     
-    console.log(`🔄 Callback query received: ${data} from ${chatId}`);
-
-    try {
-      await bot.answerCallbackQuery(query.id);
+    for (let i = 0; i < assignment.applicants.length; i++) {
+      const applicant = assignment.applicants[i];
+      const tutor = applicant.tutorId;
       
-      // Get tutor if session exists
-      let tutor = null;
-      if (userSessions[chatId]?.tutorId) {
-        tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      let applicantMsg = `*👤 Applicant ${i + 1}*\n\n`;
+      applicantMsg += `*Name:* ${tutor.fullName || 'Not provided'}\n`;
+      applicantMsg += `*Contact:* ${tutor.contactNumber || 'Not provided'}\n`;
+      applicantMsg += `*Email:* ${tutor.email || 'Not provided'}\n`;
+      applicantMsg += `*Gender:* ${tutor.gender || 'Not provided'}\n`;
+      applicantMsg += `*Race:* ${tutor.race || 'Not provided'}\n`;
+      applicantMsg += `*Education:* ${tutor.highestEducation || 'Not provided'}\n`;
+      applicantMsg += `*Status:* ${applicant.status}\n`;
+      applicantMsg += `*Applied:* ${applicant.appliedAt.toLocaleDateString()}`;
+      
+      const keyboard = [];
+      if (applicant.status === 'Pending') {
+        keyboard.push([
+          { text: '✅ Accept', callback_data: `admin_accept_${assignmentId}_${tutor._id}` },
+          { text: '❌ Reject', callback_data: `admin_reject_${assignmentId}_${tutor._id}` }
+        ]);
       }
-
-      // Handle main menu navigation
-      if (data === 'main_menu') {
-        return showMainMenu(chatId, bot);
-      }
-
-      // Handle start over
-      if (data === 'start') {
-        delete userSessions[chatId];
-        return safeSend(bot, chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
-          reply_markup: {
-            keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-            one_time_keyboard: true,
-          },
-        });
-      }
-
-      // Handle profile confirmation
-      if (data === 'profile_confirm') {
-        if (!userSessions[chatId]?.tutorId) {
-          return safeSend(bot, chatId, 'Session expired. Please start again with /start.');
-        }
-        
-        userSessions[chatId].state = 'main_menu';
-        
-        // Check if there's a pending assignment application
-        if (userSessions[chatId].pendingAssignmentId) {
-          const assignmentId = userSessions[chatId].pendingAssignmentId;
-          delete userSessions[chatId].pendingAssignmentId;
-          
-          try {
-            const assignment = await Assignment.findById(assignmentId);
-            if (!assignment) {
-              return safeSend(bot, chatId, 'Assignment not found. Returning to main menu.', {
-                reply_markup: { inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]] }
-              });
-            }
-            
-            // Check if already applied
-            const hasApplied = assignment.applicants?.some(applicant => 
-              applicant.tutorId.toString() === userSessions[chatId].tutorId.toString());
-            
-            if (hasApplied) {
-              return safeSend(bot, chatId, 'You have already applied to this assignment.', {
-                reply_markup: { inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]] }
-              });
-            }
-            
-            // Add application
-            if (!assignment.applicants) assignment.applicants = [];
-            assignment.applicants.push({
-              tutorId: userSessions[chatId].tutorId,
-              status: 'Pending',
-              appliedAt: new Date()
-            });
-            
-            await assignment.save();
-            
-            return safeSend(bot, chatId, '✅ Application submitted successfully!', {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: 'View My Applications', callback_data: 'view_applications' }],
-                  [{ text: 'Main Menu', callback_data: 'main_menu' }]
-                ]
-              }
-            });
-          } catch (err) {
-            console.error('Error processing pending application:', err);
-            return safeSend(bot, chatId, 'There was an error processing your application. Please try again.');
-          }
-        }
-        
-        return showMainMenu(chatId, bot);
-      }
-
-      // Handle assignments view
-      if (data === 'view_assignments') {
-        return showAssignments(chatId, bot, Assignment, userSessions);
-      }
-
-      // Handle assignment pagination
-      if (data.startsWith('assignments_page_')) {
-        const page = parseInt(data.split('_')[2]);
-        return showAssignments(chatId, bot, Assignment, userSessions, page);
-      }
-
-      // Handle applications view
-      if (data === 'view_applications') {
-        return showApplications(chatId, bot, Assignment, userSessions);
-      }
-
-      // Handle applications pagination
-      if (data.startsWith('applications_page_')) {
-        const page = parseInt(data.split('_')[2]);
-        return showApplications(chatId, bot, Assignment, userSessions, page);
-      }
-
-      // Handle assignment application
-      if (data.startsWith('apply_')) {
-        const assignmentId = data.replace('apply_', '');
-        
-        if (!userSessions[chatId]?.tutorId) {
-          userSessions[chatId] = { pendingAssignmentId: assignmentId, state: 'awaiting_contact' };
-          return safeSend(bot, chatId, 'Please share your phone number first to verify your profile.', {
-            reply_markup: {
-              keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-              one_time_keyboard: true,
-            },
-          });
-        }
-
-        try {
-          const assignment = await Assignment.findById(assignmentId);
-          if (!assignment) {
-            return safeSend(bot, chatId, 'Assignment not found.');
-          }
-          
-          // Check if already applied
-          const hasApplied = assignment.applicants?.some(applicant => 
-            applicant.tutorId.toString() === userSessions[chatId].tutorId.toString());
-          
-          if (hasApplied) {
-            return safeSend(bot, chatId, 'You have already applied to this assignment.');
-          }
-          
-          // Add application
-          if (!assignment.applicants) assignment.applicants = [];
-          assignment.applicants.push({
-            tutorId: userSessions[chatId].tutorId,
-            status: 'Pending',
-            appliedAt: new Date()
-          });
-          
-          await assignment.save();
-          
-          return safeSend(bot, chatId, '✅ Application submitted successfully!', {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'View My Applications', callback_data: 'view_applications' }],
-                [{ text: 'Back to Assignments', callback_data: 'view_assignments' }],
-                [{ text: 'Main Menu', callback_data: 'main_menu' }]
-              ]
-            }
-          });
-        } catch (err) {
-          console.error('Error applying to assignment:', err);
-          return safeSend(bot, chatId, 'There was an error submitting your application. Please try again.');
-        }
-      }
-
-      // Handle application withdrawal
-      if (data.startsWith('withdraw_')) {
-        const assignmentId = data.replace('withdraw_', '');
-        
-        try {
-          const assignment = await Assignment.findById(assignmentId);
-          if (!assignment) {
-            return safeSend(bot, chatId, 'Assignment not found.');
-          }
-          
-          assignment.applicants = assignment.applicants.filter(
-            applicant => applicant.tutorId.toString() !== userSessions[chatId].tutorId.toString()
-          );
-          
-          await assignment.save();
-          
-          return safeSend(bot, chatId, '✅ Application withdrawn successfully!', {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'View My Applications', callback_data: 'view_applications' }],
-                [{ text: 'Main Menu', callback_data: 'main_menu' }]
-              ]
-            }
-          });
-        } catch (err) {
-          console.error('Error withdrawing application:', err);
-          return safeSend(bot, chatId, 'There was an error withdrawing your application. Please try again.');
-        }
-      }
-
-      // Handle application details view
-      if (data.startsWith('view_application_')) {
-        const assignmentId = data.replace('view_application_', '');
-        
-        try {
-          const assignment = await Assignment.findById(assignmentId);
-          if (!assignment) {
-            return safeSend(bot, chatId, 'Assignment not found.');
-          }
-          
-          const application = assignment.applicants.find(
-            app => app.tutorId.toString() === userSessions[chatId].tutorId.toString()
-          );
-          
-          let msg = formatAssignment(assignment);
-          msg += `\n\n*Your Application Status:* ${application?.status || 'Unknown'}`;
-          msg += `\n*Applied on:* ${application?.appliedAt ? application.appliedAt.toLocaleDateString() : 'Unknown'}`;
-          
-          const keyboard = [
-            [{ text: 'Back to My Applications', callback_data: 'view_applications' }]
-          ];
-          
-          if (application?.status === 'Pending') {
-            keyboard.unshift([{ text: 'Withdraw Application', callback_data: `withdraw_${assignmentId}` }]);
-          }
-          
-          return safeSend(bot, chatId, msg, {
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: keyboard }
-          });
-        } catch (err) {
-          console.error('Error viewing application:', err);
-          return safeSend(bot, chatId, 'There was an error retrieving application details. Please try again.');
-        }
-      }
-
-      // Profile editing handlers
-      if (data === 'profile_edit') {
-        if (!tutor) {
-          return safeSend(bot, chatId, 'Tutor profile not found. Please start again with /start.');
-        }
-        
-        const profileMessage = formatTutorProfile(tutor);
-        return safeSend(bot, chatId, profileMessage + '\n\nWhat would you like to edit?', {
-          parse_mode: 'Markdown',
-          reply_markup: getMainEditProfileMenu(tutor)
-        });
-      }
-
-      // Personal info editing
-      if (data === 'edit_personal_info') {
-        return safeSend(bot, chatId, 'Select field to edit:', {
-          reply_markup: getPersonalInfoMenu(tutor)
-        });
-      }
-
-      // Individual field editing
-      if (data.startsWith('edit_') && ['fullName', 'email'].includes(data.replace('edit_', ''))) {
-        const field = data.replace('edit_', '');
-        userSessions[chatId].state = `awaiting_${field}`;
-        return safeSend(bot, chatId, `Please enter your ${field}:`);
-      }
-
-      // Menu handlers for dropdowns
-      if (data === 'edit_gender_menu') {
-        return safeSend(bot, chatId, 'Select your gender:', {
-          reply_markup: getGenderMenu()
-        });
-      }
-
-      if (data === 'edit_race_menu') {
-        return safeSend(bot, chatId, 'Select your race:', {
-          reply_markup: getRaceMenu()
-        });
-      }
-
-      if (data === 'edit_education_menu') {
-        return safeSend(bot, chatId, 'Select your highest education:', {
-          reply_markup: getEducationMenu()
-        });
-      }
-
-      // Set values for dropdown selections
-      if (data.startsWith('set_gender_')) {
-        const value = data.replace('set_gender_', '');
-        tutor.gender = value.charAt(0).toUpperCase() + value.slice(1);
-        await tutor.save();
-        
-        await safeSend(bot, chatId, `✅ Gender updated to ${tutor.gender}!`);
-        return safeSend(bot, chatId, 'Select field to edit:', {
-          reply_markup: getPersonalInfoMenu(tutor)
-        });
-      }
-
-      if (data.startsWith('set_race_')) {
-        const value = data.replace('set_race_', '');
-        tutor.race = value.charAt(0).toUpperCase() + value.slice(1);
-        await tutor.save();
-        
-        await safeSend(bot, chatId, `✅ Race updated to ${tutor.race}!`);
-        return safeSend(bot, chatId, 'Select field to edit:', {
-          reply_markup: getPersonalInfoMenu(tutor)
-        });
-      }
-
-      if (data.startsWith('set_education_')) {
-        const value = data.replace('set_education_', '');
-        const educationMap = {
-          'alevels': 'A Levels',
-          'diploma': 'Diploma',
-          'degree': 'Degree',
-          'masters': 'Masters',
-          'phd': 'PhD',
-          'others': 'Others'
-        };
-        tutor.highestEducation = educationMap[value] || value;
-        await tutor.save();
-        
-        await safeSend(bot, chatId, `✅ Education updated to ${tutor.highestEducation}!`);
-        return safeSend(bot, chatId, 'Select field to edit:', {
-          reply_markup: getPersonalInfoMenu(tutor)
-        });
-      }
-
-      // Teaching levels
-      if (data === 'edit_teaching_levels') {
-        return safeSend(bot, chatId, 'Select teaching level to edit:', {
-          reply_markup: getTeachingLevelsMenu(tutor)
-        });
-      }
-
-      // Subject menus
-      if (data === 'edit_primary_subjects') {
-        return safeSend(bot, chatId, 'Select Primary subjects you can teach:', {
-          reply_markup: getPrimarySubjectsMenu(tutor)
-        });
-      }
-
-      if (data === 'edit_secondary_subjects') {
-        return safeSend(bot, chatId, 'Select Secondary subjects you can teach:', {
-          reply_markup: getSecondarySubjectsMenu(tutor)
-        });
-      }
-
-      if (data === 'edit_jc_subjects') {
-        return safeSend(bot, chatId, 'Select JC subjects you can teach:', {
-          reply_markup: getJCSubjectsMenu(tutor)
-        });
-      }
-
-      if (data === 'edit_international_subjects') {
-        return safeSend(bot, chatId, 'Select International subjects you can teach:', {
-          reply_markup: getInternationalSubjectsMenu(tutor)
-        });
-      }
-
-      // Toggle subjects
-      if (data.startsWith('toggle_primary_')) {
-        const subject = data.replace('toggle_primary_', '');
-        initializeTeachingLevels(tutor);
-        tutor.teachingLevels.primary[subject] = !tutor.teachingLevels.primary[subject];
-        await tutor.save();
-        
-        return safeSend(bot, chatId, 'Select Primary subjects you can teach:', {
-          reply_markup: getPrimarySubjectsMenu(tutor)
-        });
-      }
-
-      if (data.startsWith('toggle_secondary_')) {
-        const subject = data.replace('toggle_secondary_', '');
-        initializeTeachingLevels(tutor);
-        tutor.teachingLevels.secondary[subject] = !tutor.teachingLevels.secondary[subject];
-        await tutor.save();
-        
-        return safeSend(bot, chatId, 'Select Secondary subjects you can teach:', {
-          reply_markup: getSecondarySubjectsMenu(tutor)
-        });
-      }
-
-      if (data.startsWith('toggle_jc_')) {
-        const subject = data.replace('toggle_jc_', '');
-        initializeTeachingLevels(tutor);
-        tutor.teachingLevels.jc[subject] = !tutor.teachingLevels.jc[subject];
-        await tutor.save();
-        
-        return safeSend(bot, chatId, 'Select JC subjects you can teach:', {
-          reply_markup: getJCSubjectsMenu(tutor)
-        });
-      }
-
-      if (data.startsWith('toggle_international_')) {
-        const subject = data.replace('toggle_international_', '');
-        initializeTeachingLevels(tutor);
-        tutor.teachingLevels.international[subject] = !tutor.teachingLevels.international[subject];
-        await tutor.save();
-        
-        return safeSend(bot, chatId, 'Select International subjects you can teach:', {
-          reply_markup: getInternationalSubjectsMenu(tutor)
-        });
-      }
-
-      // Locations
-      if (data === 'edit_locations') {
-        return safeSend(bot, chatId, 'Select locations where you can teach:', {
-          reply_markup: getLocationsMenu(tutor)
-        });
-      }
-
-      if (data.startsWith('toggle_location_')) {
-        const location = data.replace('toggle_location_', '');
-        initializeLocations(tutor);
-        tutor.locations[location] = !tutor.locations[location];
-        await tutor.save();
-        
-        return safeSend(bot, chatId, 'Select locations where you can teach:', {
-          reply_markup: getLocationsMenu(tutor)
-        });
-      }
-
-      // Availability
-      if (data === 'edit_availability') {
-        return safeSend(bot, chatId, 'Select your available time slots:', {
-          reply_markup: getAvailabilityMenu(tutor)
-        });
-      }
-
-      if (data.startsWith('toggle_availability_')) {
-        const slot = data.replace('toggle_availability_', '');
-        initializeAvailability(tutor);
-        tutor.availableTimeSlots[slot] = !tutor.availableTimeSlots[slot];
-        await tutor.save();
-        
-        return safeSend(bot, chatId, 'Select your available time slots:', {
-          reply_markup: getAvailabilityMenu(tutor)
-        });
-      }
-
-      // Hourly rates
-      if (data === 'edit_hourly_rates') {
-        if (!tutor.hourlyRate) tutor.hourlyRate = {};
-        return safeSend(bot, chatId, 'Select rate to edit:', {
-          reply_markup: getHourlyRatesMenu(tutor)
-        });
-      }
-
-      if (data.startsWith('edit_rate_')) {
-        const level = data.replace('edit_rate_', '');
-        userSessions[chatId].state = `awaiting_rate_${level}`;
-        return safeSend(bot, chatId, `Please enter your hourly rate for ${level} level (numbers only):`);
-      }
-
-      // If no handler matched, log and provide fallback
-      console.log(`⚠️ Unhandled callback query: ${data}`);
-      return safeSend(bot, chatId, 'Sorry, I didn\'t understand that action. Please try again.', {
-        reply_markup: {
-          inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]]
-        }
-      });
-
-    } catch (err) {
-      console.error('Error handling callback query:', err);
-      return safeSend(bot, chatId, 'There was an error processing your request. Please try again later.', {
-        reply_markup: {
-          inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]]
-        }
+      keyboard.push([{ text: '👤 View Full Profile', callback_data: `admin_view_tutor_${tutor._id}` }]);
+      
+      await safeSend(bot, chatId, applicantMsg, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
       });
     }
-  }
-
-  // Handle unrecognized messages
-  if (update.message && !update.message.contact && update.message.text !== '/start') {
-    const chatId = update.message.chat.id;
     
-    // If user has an active session, provide context-appropriate help
-    if (userSessions[chatId]?.state === 'main_menu') {
-      return safeSend(bot, chatId, 'I didn\'t understand that. Please use the menu buttons below.', {
-        reply_markup: {
-          inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]]
-        }
-      });
+    const actionKeyboard = [
+      [{ text: 'Back to All Applications', callback_data: 'admin_view_all_applications' }]
+    ];
+    
+    if (assignment.status === 'Open') {
+      actionKeyboard.unshift([{ text: '🔒 Close Assignment', callback_data: `admin_close_${assignmentId}` }]);
     } else {
-      return safeSend(bot, chatId, 'Please start by sharing your phone number or use /start to begin.', {
-        reply_markup: {
-          keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-          one_time_keyboard: true,
-        },
-      });
+      actionKeyboard.unshift([{ text: '🔓 Reopen Assignment', callback_data: `admin_reopen_${assignmentId}` }]);
     }
+    
+    await safeSend(bot, chatId, 'Assignment Actions:', {
+      reply_markup: { inline_keyboard: actionKeyboard }
+    });
+    
+  } catch (err) {
+    console.error('Error showing assignment applications:', err);
+    safeSend(bot, chatId, 'There was an error retrieving applications. Please try again later.');
   }
 }
+
+// Handle /post_assignment command
+async function handlePostAssignmentCommand(bot, chatId, userId, ADMIN_USERS, userSessions) {
+  if (!isAdmin(userId, ADMIN_USERS)) {
+    return safeSend(bot, chatId, '❌ You are not authorized to post assignments.');
+  }
+  
+  userSessions[chatId] = { 
+    ...userSessions[chatId], 
+    state: 'awaiting_assignment_details' 
+  };
+  
+  const formatExample = `Please provide the assignment details in the following format:
+
+Assignment: Math Tutoring for Primary 6
+Level: Primary 6
+Subject: Mathematics
+Location: Tampines
+Rate: 35/hour
+Frequency: 2 times per week
+Start Date: Next Monday
+Duration: 1.5 hours per session
+Students: 1
+Description: Student needs help with PSLE Math preparation
+Status: Open
+
+Just copy and modify the above format with your assignment details.`;
+  
+  return safeSend(bot, chatId, formatExample);
+}
+
+// Handle assignment details input from admin
+async function handleAssignmentDetails(bot, chatId, text, Assignment, userSessions, channelId, botUsername) {
+  try {
+    const assignmentData = parseAssignmentInput(text);
+    
+    // Validate required fields
+    const requiredFields = ['level', 'subject', 'location', 'rate'];
+    const missingFields = requiredFields.filter(field => !assignmentData[field]);
+    
+    if (missingFields.length > 0) {
+      return safeSend(bot, chatId, `❌ Missing required fields: ${missingFields.join(', ')}\n\nPlease provide all required information.`);
+    }
+    
+    // Create new assignment
+    const assignment = new Assignment({
+      ...assignmentData,
+      createdAt: new Date(),
+      applicants: []
+    });
+    
+    await assignment.save();
+    
+    // Post to channel if channel ID is configured
+    if (channelId) {
+      try {
+        await postAssignmentToChannel(bot, assignment, channelId, botUsername);
+        await safeSend(bot, chatId, '✅ Assignment posted successfully and shared to channel!');
+      } catch (channelError) {
+        console.error('Error posting to channel:', channelError);
+        await safeSend(bot, chatId, '✅ Assignment created successfully, but failed to post to channel.');
+      }
+    } else {
+      await safeSend(bot, chatId, '✅ Assignment posted successfully!');
+    }
+    
+    // Show the created assignment
+    const msg = formatAssignment(assignment);
+    await safeSend(bot, chatId, msg, { parse_mode: 'Markdown' });
+    
+    // Clear user session
+    userSessions[chatId].state = null;
+    
+    // Show admin panel again
+    await showAdminPanel(chatId, bot);
+    
+  } catch (err) {
+    console.error('Error creating assignment:', err);
+    safeSend(bot, chatId, 'There was an error creating the assignment. Please try again.');
+  }
+}
+
+// Handle /view_applications command
+async function handleViewApplicationsCommand(bot, chatId, userId, ADMIN_USERS, Assignment, text) {
+  if (!isAdmin(userId, ADMIN_USERS)) {
+    return safeSend(bot, chatId, '❌ You are not authorized to view applications.');
+  }
+  
+  // Extract assignment ID from command if provided
+  const parts = text.split(' ');
+  if (parts.length > 1) {
+    const assignmentId = parts[1];
+    await showAssignmentApplications(chatId, bot, Assignment, assignmentId);
+  } else {
+    await showAllApplications(chatId, bot, Assignment);
+  }
+}
+
+// Check if user can apply (not admin)
+function canUserApply(userId, ADMIN_USERS) {
+  return !isAdmin(userId, ADMIN_USERS);
+}
+
+// Handle assignment application
+async function handleAssignmentApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions, ADMIN_USERS) {
+  try {
+    // Check if user is admin
+    if (!canUserApply(userId, ADMIN_USERS)) {
+      return safeSend(bot, chatId, '❌ Admins cannot apply for assignments.');
+    }
+    
+    // Check if user session exists
+    if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
+      return safeSend(bot, chatId, 'Your session has expired. Please start again with /start');
+    }
+    
+    const tutorId = userSessions[chatId].tutorId;
+    
+    // Find the assignment
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) {
+      return safeSend(bot, chatId, 'Assignment not found.');
+    }
+    
+    if (assignment.status !== 'Open') {
+      return safeSend(bot, chatId, 'This assignment is no longer accepting applications.');
+    }
+    
+    // Check if already applied
+    const existingApplication = assignment.applicants?.find(
+      app => app.tutorId.toString() === tutorId.toString()
+    );
+    
+    if (existingApplication) {
+      return safeSend(bot, chatId, 'You have already applied for this assignment.');
+    }
+    
+    // Add application
+    assignment.applicants = assignment.applicants || [];
+    assignment.applicants.push({
+      tutorId: tutorId,
+      status: 'Pending',
+      appliedAt: new Date()
+    });
+    
+    await assignment.save();
+    
+    const msg = `✅ Application submitted successfully!\n\n${formatAssignment(assignment)}`;
+    await safeSend(bot, chatId, msg, { parse_mode: 'Markdown' });
+    
+    // Show main menu
+    await showMainMenu(chatId, bot, userId, ADMIN_USERS);
+    
+  } catch (err) {
+    console.error('Error applying for assignment:', err);
+    safeSend(bot, chatId, 'There was an error processing your application. Please try again.');
+  }
+}
+
+// Accept/Reject applications
+async function handleApplicationDecision(bot, chatId, assignmentId, tutorId, decision, Assignment, Tutor) {
+  try {
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) {
+      return safeSend(bot, chatId, 'Assignment not found.');
+    }
+    
+    const applicant = assignment.applicants.find(
+      app => app.tutorId.toString() === tutorId.toString()
+    );
+    
+    if (!applicant) {
+      return safeSend(bot, chatId, 'Application not found.');
+    }
+    
+    applicant.status = decision;
+    applicant.decidedAt = new Date();
+    
+    await assignment.save();
+    
+    // Notify the tutor
+    const tutor = await Tutor.findById(tutorId);
+    if (tutor && tutor.chatId) {
+      const statusEmoji = decision === 'Accepted' ? '✅' : '❌';
+      const notificationMsg = `${statusEmoji} Your application has been ${decision.toLowerCase()}!\n\n${formatAssignment(assignment)}`;
+      
+      try {
+        await safeSend(bot, tutor.chatId, notificationMsg, { parse_mode: 'Markdown' });
+      } catch (notifyError) {
+        console.error('Error notifying tutor:', notifyError);
+      }
+    }
+    
+    await safeSend(bot, chatId, `✅ Application ${decision.toLowerCase()} successfully.`);
+    
+    // Show updated assignment applications
+    await showAssignmentApplications(chatId, bot, Assignment, assignmentId);
+    
+  } catch (err) {
+    console.error('Error handling application decision:', err);
+    safeSend(bot, chatId, 'There was an error processing the decision. Please try again.');
+  }
+}
+
+// Close/Reopen assignment
+async function toggleAssignmentStatus(bot, chatId, assignmentId, Assignment) {
+  try {
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) {
+      return safeSend(bot, chatId, 'Assignment not found.');
+    }
+    
+    const newStatus = assignment.status === 'Open' ? 'Closed' : 'Open';
+    assignment.status = newStatus;
+    await assignment.save();
+    
+    const statusEmoji = newStatus === 'Open' ? '🔓' : '🔒';
+    await safeSend(bot, chatId, `${statusEmoji} Assignment ${newStatus.toLowerCase()} successfully.`);
+    
+    // Show updated assignment
+    const msg = formatAssignment(assignment);
+    await safeSend(bot, chatId, msg, { parse_mode: 'Markdown' });
+    
+  } catch (err) {
+    console.error('Error toggling assignment status:', err);
+    safeSend(bot, chatId, 'There was an error updating the assignment status. Please try again.');
+  }
+}
+
+// Handle start parameter for direct application
+async function handleStartParameter(bot, chatId, userId, startParam, Assignment, Tutor, userSessions, ADMIN_USERS) {
+  if (startParam && startParam.startsWith('apply_')) {
+    const assignmentId = startParam.replace('apply_', '');
+    
+    // Check if user is admin
+    if (!canUserApply(userId, ADMIN_USERS)) {
+      return safeSend(bot, chatId, '❌ Admins cannot apply for assignments. Please use the admin panel to manage assignments.');
+    }
+    
+    // Find or create tutor session
+    let tutor = await Tutor.findOne({ chatId: chatId });
+    if (!tutor) {
+      tutor = new Tutor({ chatId: chatId, userId: userId });
+      await tutor.save();
+    }
+    
+    userSessions[chatId] = { tutorId: tutor._id };
+    
+    // Check if profile is complete enough to apply
+    if (!tutor.fullName || !tutor.contactNumber) {
+      await safeSend(bot, chatId, 'Please complete your profile before applying for assignments.');
+      return showMainMenu(chatId, bot, userId, ADMIN_USERS);
+    }
+    
+    // Process the application
+    await handleAssignmentApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions, ADMIN_USERS);
+  }
+}
+
+// Export all functions
+module.exports = {
+  normalizePhone,
+  initializeTeachingLevels,
+  initializeAvailability,
+  initializeLocations,
+  getTick,
+  formatTutorProfile,
+  formatAssignment,
+  formatAssignmentForChannel,
+  getMainEditProfileMenu,
+  getPersonalInfoMenu,
+  getTeachingLevelsMenu,
+  getLocationsMenu,
+  getAvailabilityMenu,
+  getPrimarySubjectsMenu,
+  getSecondarySubjectsMenu,
+  getJCSubjectsMenu,
+  getInternationalSubjectsMenu,
+  getGenderMenu,
+  getRaceMenu,
+  getEducationMenu,
+  getHourlyRatesMenu,
+  safeSend,
+  isAdmin,
+  showMainMenu,
+  showAdminPanel,
+  showAssignments,
+  showApplications,
+  showAllApplications,
+  showAssignmentApplications,
+  parseAssignmentInput,
+  postAssignmentToChannel,
+  handlePostAssignmentCommand,
+  handleAssignmentDetails,
+  handleViewApplicationsCommand,
+  canUserApply,
+  handleAssignmentApplication,
+  handleApplicationDecision,
+  toggleAssignmentStatus,
+  handleStartParameter,
+  ITEMS_PER_PAGE
+};
