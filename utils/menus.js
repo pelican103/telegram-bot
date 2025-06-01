@@ -61,28 +61,137 @@ export function getTeachingLevelMenu(tutor) {
       [{ text: `${getTick(levels.primary)} Primary`, callback_data: 'toggle_primary' }],
       [{ text: `${getTick(levels.secondary)} Secondary`, callback_data: 'toggle_secondary' }],
       [{ text: `${getTick(levels.jc)} Junior College (JC)`, callback_data: 'toggle_jc' }],
-      [{ text: `${getTick(levels.ib)} International Baccalaureate (IB)`, callback_data: 'toggle_ib' }],
-      [{ text: `${getTick(levels.igcse)} IGCSE`, callback_data: 'toggle_igcse' }],
-      [{ text: `${getTick(levels.diploma)} Polytechnic Diploma`, callback_data: 'toggle_diploma' }],
-      [{ text: `${getTick(levels.university)} University`, callback_data: 'toggle_university' }],
-      [{ text: `${getTick(levels.others)} Others`, callback_data: 'toggle_others' }],
+      [{ text: `${getTick(levels.international)} International`, callback_data: 'toggle_international' }],
       [{ text: '💾 Save & Back', callback_data: 'profile_edit' }]
+    ]
+  };
+}
+
+// Subject menu for each level
+export function getPrimarySubjectsMenu(tutor) {
+  const subjects = tutor.teachingLevels?.primary || {};
+  return {
+    inline_keyboard: [
+      [
+        { text: `${getTick(subjects.english)} English`, callback_data: 'toggle_primary_english' },
+        { text: `${getTick(subjects.math)} Math`, callback_data: 'toggle_primary_math' }
+      ],
+      [
+        { text: `${getTick(subjects.science)} Science`, callback_data: 'toggle_primary_science' },
+        { text: `${getTick(subjects.chinese)} Chinese`, callback_data: 'toggle_primary_chinese' }
+      ],
+      [
+        { text: `${getTick(subjects.malay)} Malay`, callback_data: 'toggle_primary_malay' },
+        { text: `${getTick(subjects.tamil)} Tamil`, callback_data: 'toggle_primary_tamil' }
+      ],
+      [{ text: '🔙 Back to Levels', callback_data: 'edit_teachingLevels' }]
+    ]
+  };
+}
+
+export function getSecondarySubjectsMenu(tutor) {
+  const subjects = tutor.teachingLevels?.secondary || {};
+  return {
+    inline_keyboard: [
+      [
+        { text: `${getTick(subjects.english)} English`, callback_data: 'toggle_secondary_english' },
+        { text: `${getTick(subjects.math)} Math`, callback_data: 'toggle_secondary_math' }
+      ],
+      [
+        { text: `${getTick(subjects.aMath)} A Math`, callback_data: 'toggle_secondary_aMath' },
+        { text: `${getTick(subjects.eMath)} E Math`, callback_data: 'toggle_secondary_eMath' }
+      ],
+      [
+        { text: `${getTick(subjects.physics)} Physics`, callback_data: 'toggle_secondary_physics' },
+        { text: `${getTick(subjects.chemistry)} Chemistry`, callback_data: 'toggle_secondary_chemistry' }
+      ],
+      [
+        { text: `${getTick(subjects.biology)} Biology`, callback_data: 'toggle_secondary_biology' },
+        { text: `${getTick(subjects.science)} Science`, callback_data: 'toggle_secondary_science' }
+      ],
+      [
+        { text: `${getTick(subjects.history)} History`, callback_data: 'toggle_secondary_history' },
+        { text: `${getTick(subjects.geography)} Geography`, callback_data: 'toggle_secondary_geography' }
+      ],
+      [
+        { text: `${getTick(subjects.literature)} Literature`, callback_data: 'toggle_secondary_literature' },
+        { text: `${getTick(subjects.chinese)} Chinese`, callback_data: 'toggle_secondary_chinese' }
+      ],
+      [
+        { text: `${getTick(subjects.malay)} Malay`, callback_data: 'toggle_secondary_malay' },
+        { text: `${getTick(subjects.tamil)} Tamil`, callback_data: 'toggle_secondary_tamil' }
+      ],
+      [{ text: '🔙 Back to Levels', callback_data: 'edit_teachingLevels' }]
+    ]
+  };
+}
+
+export function getJCSubjectsMenu(tutor) {
+  const subjects = tutor.teachingLevels?.jc || {};
+  return {
+    inline_keyboard: [
+      [
+        { text: `${getTick(subjects.generalPaper)} General Paper`, callback_data: 'toggle_jc_generalPaper' },
+        { text: `${getTick(subjects.h1Math)} H1 Math`, callback_data: 'toggle_jc_h1Math' }
+      ],
+      [
+        { text: `${getTick(subjects.h2Math)} H2 Math`, callback_data: 'toggle_jc_h2Math' },
+        { text: `${getTick(subjects.h1Physics)} H1 Physics`, callback_data: 'toggle_jc_h1Physics' }
+      ],
+      [
+        { text: `${getTick(subjects.h2Physics)} H2 Physics`, callback_data: 'toggle_jc_h2Physics' },
+        { text: `${getTick(subjects.h1Chemistry)} H1 Chemistry`, callback_data: 'toggle_jc_h1Chemistry' }
+      ],
+      [
+        { text: `${getTick(subjects.h2Chemistry)} H2 Chemistry`, callback_data: 'toggle_jc_h2Chemistry' },
+        { text: `${getTick(subjects.h1Biology)} H1 Biology`, callback_data: 'toggle_jc_h1Biology' }
+      ],
+      [
+        { text: `${getTick(subjects.h2Biology)} H2 Biology`, callback_data: 'toggle_jc_h2Biology' },
+        { text: `${getTick(subjects.h1Economics)} H1 Economics`, callback_data: 'toggle_jc_h1Economics' }
+      ],
+      [
+        { text: `${getTick(subjects.h2Economics)} H2 Economics`, callback_data: 'toggle_jc_h2Economics' },
+        { text: `${getTick(subjects.h1History)} H1 History`, callback_data: 'toggle_jc_h1History' }
+      ],
+      [
+        { text: `${getTick(subjects.h2History)} H2 History`, callback_data: 'toggle_jc_h2History' }
+      ],
+      [{ text: '🔙 Back to Levels', callback_data: 'edit_teachingLevels' }]
+    ]
+  };
+}
+
+export function getInternationalSubjectsMenu(tutor) {
+  const subjects = tutor.teachingLevels?.international || {};
+  return {
+    inline_keyboard: [
+      [
+        { text: `${getTick(subjects.ib)} IB`, callback_data: 'toggle_international_ib' },
+        { text: `${getTick(subjects.igcse)} IGCSE`, callback_data: 'toggle_international_igcse' }
+      ],
+      [
+        { text: `${getTick(subjects.ielts)} IELTS`, callback_data: 'toggle_international_ielts' },
+        { text: `${getTick(subjects.toefl)} TOEFL`, callback_data: 'toggle_international_toefl' }
+      ],
+      [{ text: '🔙 Back to Levels', callback_data: 'edit_teachingLevels' }]
     ]
   };
 }
 
 // Enhanced availability menu with more granular options
 export function getAvailabilityMenu(tutor) {
-  const avail = tutor.availability || {};
+  const slots = tutor.availableTimeSlots || {};
   
   const text = `*Current Availability:*\n\n` +
-    `*Days:*\n` +
-    `${getTick(avail.weekdays)} Weekdays (Mon-Fri)\n` +
-    `${getTick(avail.weekends)} Weekends (Sat-Sun)\n\n` +
-    `*Time Slots:*\n` +
-    `${getTick(avail.mornings)} Mornings (8AM-12PM)\n` +
-    `${getTick(avail.afternoons)} Afternoons (12PM-6PM)\n` +
-    `${getTick(avail.evenings)} Evenings (6PM-10PM)\n\n` +
+    `*Weekdays:*\n` +
+    `${getTick(slots.weekdayMorning)} Morning (8AM-12PM)\n` +
+    `${getTick(slots.weekdayAfternoon)} Afternoon (12PM-6PM)\n` +
+    `${getTick(slots.weekdayEvening)} Evening (6PM-10PM)\n\n` +
+    `*Weekends:*\n` +
+    `${getTick(slots.weekendMorning)} Morning (8AM-12PM)\n` +
+    `${getTick(slots.weekendAfternoon)} Afternoon (12PM-6PM)\n` +
+    `${getTick(slots.weekendEvening)} Evening (6PM-10PM)\n\n` +
     `Select to toggle your availability:`;
 
   return {
@@ -92,14 +201,17 @@ export function getAvailabilityMenu(tutor) {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: `${getTick(avail.weekdays)} Weekdays`, callback_data: 'toggle_weekdays' },
-            { text: `${getTick(avail.weekends)} Weekends`, callback_data: 'toggle_weekends' }
+            { text: `${getTick(slots.weekdayMorning)} Weekday Morning`, callback_data: 'toggle_weekdayMorning' },
+            { text: `${getTick(slots.weekdayAfternoon)} Weekday Afternoon`, callback_data: 'toggle_weekdayAfternoon' }
           ],
           [
-            { text: `${getTick(avail.mornings)} Mornings`, callback_data: 'toggle_mornings' },
-            { text: `${getTick(avail.afternoons)} Afternoons`, callback_data: 'toggle_afternoons' }
+            { text: `${getTick(slots.weekdayEvening)} Weekday Evening`, callback_data: 'toggle_weekdayEvening' },
+            { text: `${getTick(slots.weekendMorning)} Weekend Morning`, callback_data: 'toggle_weekendMorning' }
           ],
-          [{ text: `${getTick(avail.evenings)} Evenings`, callback_data: 'toggle_evenings' }],
+          [
+            { text: `${getTick(slots.weekendAfternoon)} Weekend Afternoon`, callback_data: 'toggle_weekendAfternoon' },
+            { text: `${getTick(slots.weekendEvening)} Weekend Evening`, callback_data: 'toggle_weekendEvening' }
+          ],
           [{ text: '💾 Save & Back', callback_data: 'profile_edit' }]
         ]
       }
@@ -111,10 +223,10 @@ export function getAvailabilityMenu(tutor) {
 export function getLocationsMenu(tutor) {
   const locations = tutor.locations || {};
   
-  // Singapore regions
+  // Singapore regions from schema
   const regions = [
     'north', 'south', 'east', 'west', 'central',
-    'northeast', 'northwest', 'southeast', 'southwest'
+    'northeast', 'northwest'
   ];
   
   const keyboard = [];
@@ -203,48 +315,30 @@ export function getHighestEducationMenu() {
   };
 }
 
-// Assignment-related menus
+// Assignment filter menu
 export function getAssignmentFilterMenu() {
   return {
     inline_keyboard: [
       [
-        { text: 'By Subject', callback_data: 'filter_subject' },
-        { text: 'By Level', callback_data: 'filter_level' }
+        { text: '📚 Subject', callback_data: 'filter_subject' },
+        { text: '🎓 Level', callback_data: 'filter_level' }
       ],
       [
-        { text: 'By Location', callback_data: 'filter_location' },
-        { text: 'By Rate', callback_data: 'filter_rate' }
+        { text: '📍 Location', callback_data: 'filter_location' },
+        { text: '💰 Rate Range', callback_data: 'filter_rate_range' }
       ],
-      [{ text: 'Clear Filters', callback_data: 'clear_filters' }],
+      [
+        { text: '⏰ Schedule', callback_data: 'filter_schedule' },
+        { text: '👥 Student Count', callback_data: 'filter_student_count' }
+      ],
+      [
+        { text: '👨‍🏫 Tutor Requirements', callback_data: 'filter_requirements' },
+        { text: '📅 Start Date', callback_data: 'filter_start_date' }
+      ],
+      [{ text: '🔍 Apply Filters', callback_data: 'apply_filters' }],
+      [{ text: '🗑️ Clear All Filters', callback_data: 'clear_all_filters' }],
       [{ text: '🔙 Back to Assignments', callback_data: 'view_assignments' }]
     ]
-  };
-}
-
-export function getSubjectFilterMenu() {
-  const subjects = [
-    'Mathematics', 'English', 'Science', 'Physics', 'Chemistry', 'Biology',
-    'History', 'Geography', 'Economics', 'Accounting', 'Literature',
-    'Chinese', 'Malay', 'Tamil', 'Hindi', 'French', 'German'
-  ];
-  
-  const keyboard = [];
-  
-  // Create rows of 2 subjects each
-  for (let i = 0; i < subjects.length; i += 2) {
-    const row = [];
-    row.push({ text: subjects[i], callback_data: `subject_${subjects[i].toLowerCase()}` });
-    
-    if (i + 1 < subjects.length) {
-      row.push({ text: subjects[i + 1], callback_data: `subject_${subjects[i + 1].toLowerCase()}` });
-    }
-    keyboard.push(row);
-  }
-  
-  keyboard.push([{ text: '🔙 Back', callback_data: 'filter_assignments' }]);
-  
-  return {
-    inline_keyboard: keyboard
   };
 }
 
@@ -259,11 +353,106 @@ export function getLevelFilterMenu() {
         { text: 'Junior College', callback_data: 'level_jc' },
         { text: 'International', callback_data: 'level_international' }
       ],
-      [
-        { text: 'Polytechnic', callback_data: 'level_polytechnic' },
-        { text: 'University', callback_data: 'level_university' }
-      ],
       [{ text: '🔙 Back', callback_data: 'filter_assignments' }]
+    ]
+  };
+}
+
+export function getScheduleFilterMenu() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🌅 Weekday Morning', callback_data: 'schedule_weekdayMorning' },
+        { text: '☀️ Weekday Afternoon', callback_data: 'schedule_weekdayAfternoon' }
+      ],
+      [
+        { text: '🌆 Weekday Evening', callback_data: 'schedule_weekdayEvening' },
+        { text: '🌅 Weekend Morning', callback_data: 'schedule_weekendMorning' }
+      ],
+      [
+        { text: '☀️ Weekend Afternoon', callback_data: 'schedule_weekendAfternoon' },
+        { text: '🌆 Weekend Evening', callback_data: 'schedule_weekendEvening' }
+      ],
+      [{ text: '🔙 Back', callback_data: 'advanced_filters' }]
+    ]
+  };
+}
+
+export function getStudentCountMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: '1 Student', callback_data: 'students_1' }],
+      [{ text: '2 Students', callback_data: 'students_2' }],
+      [{ text: '3-5 Students', callback_data: 'students_3_5' }],
+      [{ text: '6+ Students', callback_data: 'students_6_plus' }],
+      [{ text: '🔙 Back', callback_data: 'advanced_filters' }]
+    ]
+  };
+}
+
+export function getTutorRequirementsMenu() {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Gender', callback_data: 'req_gender' },
+        { text: 'Race', callback_data: 'req_race' }
+      ],
+      [
+        { text: 'Experience', callback_data: 'req_experience' },
+        { text: 'Qualifications', callback_data: 'req_qualifications' }
+      ],
+      [{ text: '🔙 Back', callback_data: 'advanced_filters' }]
+    ]
+  };
+}
+
+export function getGenderRequirementsMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'Male', callback_data: 'req_gender_male' }],
+      [{ text: 'Female', callback_data: 'req_gender_female' }],
+      [{ text: 'Any', callback_data: 'req_gender_any' }],
+      [{ text: '🔙 Back', callback_data: 'filter_requirements' }]
+    ]
+  };
+}
+
+export function getRaceRequirementsMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'Chinese', callback_data: 'req_race_chinese' }],
+      [{ text: 'Malay', callback_data: 'req_race_malay' }],
+      [{ text: 'Indian', callback_data: 'req_race_indian' }],
+      [{ text: 'Eurasian', callback_data: 'req_race_eurasian' }],
+      [{ text: 'Any', callback_data: 'req_race_any' }],
+      [{ text: '🔙 Back', callback_data: 'filter_requirements' }]
+    ]
+  };
+}
+
+export function getExperienceRequirementsMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'None', callback_data: 'req_experience_none' }],
+      [{ text: '1-2 years', callback_data: 'req_experience_1_2' }],
+      [{ text: '3-5 years', callback_data: 'req_experience_3_5' }],
+      [{ text: '5+ years', callback_data: 'req_experience_5_plus' }],
+      [{ text: '🔙 Back', callback_data: 'filter_requirements' }]
+    ]
+  };
+}
+
+export function getQualificationsRequirementsMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'O Levels', callback_data: 'req_qual_olevels' }],
+      [{ text: 'A Levels', callback_data: 'req_qual_alevels' }],
+      [{ text: 'Diploma', callback_data: 'req_qual_diploma' }],
+      [{ text: 'Degree', callback_data: 'req_qual_degree' }],
+      [{ text: 'Masters', callback_data: 'req_qual_masters' }],
+      [{ text: 'PhD', callback_data: 'req_qual_phd' }],
+      [{ text: 'Any', callback_data: 'req_qual_any' }],
+      [{ text: '🔙 Back', callback_data: 'filter_requirements' }]
     ]
   };
 }
@@ -383,40 +572,6 @@ export function getRateRangeMenu() {
       [{ text: '$80-120/hr', callback_data: 'rate_range_80_120' }],
       [{ text: '$120+/hr', callback_data: 'rate_range_120_plus' }],
       [{ text: 'Custom Range', callback_data: 'rate_range_custom' }],
-      [{ text: '🔙 Back', callback_data: 'advanced_filters' }]
-    ]
-  };
-}
-
-// Schedule filter menu
-export function getScheduleFilterMenu() {
-  return {
-    inline_keyboard: [
-      [
-        { text: '🌅 Morning (8AM-12PM)', callback_data: 'schedule_morning' },
-        { text: '☀️ Afternoon (12PM-6PM)', callback_data: 'schedule_afternoon' }
-      ],
-      [
-        { text: '🌆 Evening (6PM-10PM)', callback_data: 'schedule_evening' },
-        { text: '🌃 Night (10PM-12AM)', callback_data: 'schedule_night' }
-      ],
-      [
-        { text: '📅 Weekdays Only', callback_data: 'schedule_weekdays' },
-        { text: '🏖️ Weekends Only', callback_data: 'schedule_weekends' }
-      ],
-      [{ text: '🔙 Back', callback_data: 'advanced_filters' }]
-    ]
-  };
-}
-
-// Student count filter menu
-export function getStudentCountMenu() {
-  return {
-    inline_keyboard: [
-      [{ text: '1 Student', callback_data: 'students_1' }],
-      [{ text: '2 Students', callback_data: 'students_2' }],
-      [{ text: '3-5 Students', callback_data: 'students_3_5' }],
-      [{ text: '6+ Students', callback_data: 'students_6_plus' }],
       [{ text: '🔙 Back', callback_data: 'advanced_filters' }]
     ]
   };

@@ -22,7 +22,21 @@ import {
   getHourlyRateMenu,
   getGenderMenu,
   getRaceMenu,
-  getHighestEducationMenu
+  getHighestEducationMenu,
+  getPrimarySubjectsMenu,
+  getSecondarySubjectsMenu,
+  getJCSubjectsMenu,
+  getInternationalSubjectsMenu,
+  getSubjectMenu,
+  getLevelFilterMenu,
+  getScheduleFilterMenu,
+  getStudentCountMenu,
+  getTutorRequirementsMenu,
+  getGenderRequirementsMenu,
+  getRaceRequirementsMenu,
+  getExperienceRequirementsMenu,
+  getQualificationsRequirementsMenu,
+  getAssignmentFilterMenu
 } from '../utils/menus.js';
 
 const ITEMS_PER_PAGE = 5;
@@ -457,27 +471,99 @@ export async function handleUpdate(bot, context, update) {
 
       // Handle toggle operations for teaching levels
       if (data.startsWith('toggle_')) {
-        const [, category, field] = data.split('_');
+        const parts = data.split('_');
         
-        if (['primary', 'secondary', 'jc', 'ib', 'others'].includes(category)) {
-          initializeTeachingLevels(tutor);
-          tutor.teachingLevels[category] = !tutor.teachingLevels[category];
-          await tutor.save();
-          
-          return safeSend(bot, chatId, 'Teaching levels updated!', {
-            reply_markup: getTeachingLevelMenu(tutor)
-          });
+        if (parts.length === 2) {
+          // Handle level toggles (primary, secondary, jc, international)
+          const level = parts[1];
+          if (['primary', 'secondary', 'jc', 'international'].includes(level)) {
+            initializeTeachingLevels(tutor);
+            if (!tutor.teachingLevels[level]) {
+              tutor.teachingLevels[level] = {};
+            }
+            await tutor.save();
+            
+            // Show the appropriate subject menu
+            let menu;
+            switch(level) {
+              case 'primary':
+                menu = getPrimarySubjectsMenu(tutor);
+                break;
+              case 'secondary':
+                menu = getSecondarySubjectsMenu(tutor);
+                break;
+              case 'jc':
+                menu = getJCSubjectsMenu(tutor);
+                break;
+              case 'international':
+                menu = getInternationalSubjectsMenu(tutor);
+                break;
+            }
+            
+            return safeSend(bot, chatId, `Select ${level} subjects:`, {
+              reply_markup: menu
+            });
+          }
+        } else if (parts.length === 3) {
+          // Handle subject toggles (e.g., toggle_primary_english)
+          const [_, level, subject] = parts;
+          if (['primary', 'secondary', 'jc', 'international'].includes(level)) {
+            initializeTeachingLevels(tutor);
+            if (!tutor.teachingLevels[level]) {
+              tutor.teachingLevels[level] = {};
+            }
+            tutor.teachingLevels[level][subject] = !tutor.teachingLevels[level][subject];
+            await tutor.save();
+            
+            // Show the appropriate subject menu
+            let menu;
+            switch(level) {
+              case 'primary':
+                menu = getPrimarySubjectsMenu(tutor);
+                break;
+              case 'secondary':
+                menu = getSecondarySubjectsMenu(tutor);
+                break;
+              case 'jc':
+                menu = getJCSubjectsMenu(tutor);
+                break;
+              case 'international':
+                menu = getInternationalSubjectsMenu(tutor);
+                break;
+            }
+            
+            return safeSend(bot, chatId, `${subject} ${tutor.teachingLevels[level][subject] ? 'added' : 'removed'}!`, {
+              reply_markup: menu
+            });
+          }
         }
         
-        if (['weekdays', 'weekends', 'mornings', 'afternoons', 'evenings'].includes(category)) {
+        // Handle availability toggles
+        if (['weekdayMorning', 'weekdayAfternoon', 'weekdayEvening', 
+             'weekendMorning', 'weekendAfternoon', 'weekendEvening'].includes(parts[1])) {
           initializeAvailability(tutor);
-          tutor.availability[category] = !tutor.availability[category];
+          const slot = parts[1];
+          tutor.availableTimeSlots[slot] = !tutor.availableTimeSlots[slot];
           await tutor.save();
           
           const menuData = getAvailabilityMenu(tutor);
           return safeSend(bot, chatId, 'Availability updated!', {
             parse_mode: menuData.options?.parse_mode || 'HTML',
             reply_markup: menuData.options?.reply_markup || menuData
+          });
+        }
+        
+        // Handle location toggles
+        if (parts[1] === 'location') {
+          const location = parts[2];
+          if (!tutor.locations) {
+            tutor.locations = {};
+          }
+          tutor.locations[location] = !tutor.locations[location];
+          await tutor.save();
+          
+          return safeSend(bot, chatId, 'Location updated!', {
+            reply_markup: getLocationsMenu(tutor)
           });
         }
       }
@@ -538,6 +624,25 @@ export async function handleUpdate(bot, context, update) {
         return safeSend(bot, chatId, `✅ Education updated to ${tutor.education}`, {
           reply_markup: getEditProfileMenu(tutor)
         });
+      }
+
+      // Handle assignment filters
+      const filterActions = [
+        'filter_subject', 'filter_level', 'filter_location', 'filter_rate_range',
+        'filter_schedule', 'filter_student_count', 'filter_requirements', 'filter_start_date',
+        'apply_filters', 'clear_all_filters', 'level_primary', 'level_secondary',
+        'level_jc', 'level_international', 'schedule_weekdayMorning', 'schedule_weekdayAfternoon',
+        'schedule_weekdayEvening', 'schedule_weekendMorning', 'schedule_weekendAfternoon',
+        'schedule_weekendEvening', 'students_1', 'students_2', 'students_3_5', 'students_6_plus',
+        'req_gender', 'req_race', 'req_experience', 'req_qualifications'
+      ];
+
+      if (filterActions.includes(data) || 
+          data.startsWith('req_gender_') || 
+          data.startsWith('req_race_') || 
+          data.startsWith('req_experience_') || 
+          data.startsWith('req_qual_')) {
+        return handleAssignmentFilters(ctx, data);
       }
 
       console.log(`⚠️ Unhandled callback: ${data}`);

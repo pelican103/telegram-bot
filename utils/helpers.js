@@ -29,44 +29,69 @@ export function normalizePhone(phone) {
 export function initializeTeachingLevels(tutor) {
   if (!tutor.teachingLevels) {
     tutor.teachingLevels = {
-      primary: false,
-      secondary: false,
-      jc: false,
-      ib: false,
-      others: false,
+      primary: {
+        english: false,
+        math: false,
+        science: false,
+        chinese: false,
+        malay: false,
+        tamil: false
+      },
+      secondary: {
+        english: false,
+        math: false,
+        aMath: false,
+        eMath: false,
+        physics: false,
+        chemistry: false,
+        biology: false,
+        science: false,
+        history: false,
+        geography: false,
+        literature: false,
+        chinese: false,
+        malay: false,
+        tamil: false
+      },
+      jc: {
+        generalPaper: false,
+        h1Math: false,
+        h2Math: false,
+        h1Physics: false,
+        h2Physics: false,
+        h1Chemistry: false,
+        h2Chemistry: false,
+        h1Biology: false,
+        h2Biology: false,
+        h1Economics: false,
+        h2Economics: false,
+        h1History: false,
+        h2History: false
+      },
+      international: {
+        ib: false,
+        igcse: false,
+        ielts: false,
+        toefl: false
+      }
     };
   }
-  
-  // Ensure all required fields exist
-  const requiredLevels = ['primary', 'secondary', 'jc', 'ib', 'others'];
-  requiredLevels.forEach(level => {
-    if (tutor.teachingLevels[level] === undefined) {
-      tutor.teachingLevels[level] = false;
-    }
-  });
 }
 
 /**
  * Initialize availability object with default values
  */
 export function initializeAvailability(tutor) {
-  if (!tutor.availability) {
-    tutor.availability = {
-      weekdays: false,
-      weekends: false,
-      mornings: false,
-      afternoons: false,
-      evenings: false,
+  if (!tutor.availableTimeSlots) {
+    tutor.availableTimeSlots = {
+      weekdayMorning: false,
+      weekdayAfternoon: false,
+      weekdayEvening: false,
+      weekendMorning: false,
+      weekendAfternoon: false,
+      weekendEvening: false
     };
   }
-  
-  // Ensure all required fields exist
-  const requiredAvailability = ['weekdays', 'weekends', 'mornings', 'afternoons', 'evenings'];
-  requiredAvailability.forEach(slot => {
-    if (tutor.availability[slot] === undefined) {
-      tutor.availability[slot] = false;
-    }
-  });
 }
 
 /**
@@ -193,4 +218,122 @@ export function parseCallbackData(callbackData) {
     action: parts[0],
     params: parts.slice(1)
   };
+}
+
+export function initializeAssignment(tutorId) {
+  return {
+    title: '',
+    level: '',
+    subject: '',
+    location: '',
+    frequency: '',
+    duration: 0,
+    rate: 0,
+    rateType: 'hour',
+    studentGender: 'Any',
+    studentCount: 1,
+    tutorRequirements: {
+      gender: 'Any',
+      race: 'Any',
+      experience: 'None',
+      qualifications: 'Any'
+    },
+    preferredTiming: {
+      weekday: {
+        morning: false,
+        afternoon: false,
+        evening: false
+      },
+      weekend: {
+        morning: false,
+        afternoon: false,
+        evening: false
+      }
+    },
+    additionalDetails: '',
+    notes: '',
+    status: 'Open',
+    startDate: null,
+    deadline: null,
+    applicants: [],
+    tutor: tutorId
+  };
+}
+
+export function validateAssignment(assignment) {
+  const errors = [];
+
+  if (!assignment.title) {
+    errors.push('Title is required');
+  }
+
+  if (!assignment.level) {
+    errors.push('Education level is required');
+  }
+
+  if (!assignment.subject) {
+    errors.push('Subject is required');
+  }
+
+  if (!assignment.location) {
+    errors.push('Location is required');
+  }
+
+  if (!assignment.frequency) {
+    errors.push('Frequency is required');
+  }
+
+  if (!assignment.duration || assignment.duration <= 0) {
+    errors.push('Duration must be greater than 0');
+  }
+
+  if (!assignment.rate || assignment.rate <= 0) {
+    errors.push('Rate must be greater than 0');
+  }
+
+  if (!assignment.studentCount || assignment.studentCount <= 0) {
+    errors.push('Student count must be greater than 0');
+  }
+
+  // Check if at least one time slot is selected
+  const hasTimeSlot = assignment.preferredTiming &&
+    ((assignment.preferredTiming.weekday &&
+      (assignment.preferredTiming.weekday.morning ||
+       assignment.preferredTiming.weekday.afternoon ||
+       assignment.preferredTiming.weekday.evening)) ||
+     (assignment.preferredTiming.weekend &&
+      (assignment.preferredTiming.weekend.morning ||
+       assignment.preferredTiming.weekend.afternoon ||
+       assignment.preferredTiming.weekend.evening)));
+
+  if (!hasTimeSlot) {
+    errors.push('At least one time slot must be selected');
+  }
+
+  return errors;
+}
+
+export function formatTimeSlot(timeSlot) {
+  const { weekday, weekend } = timeSlot;
+  let text = '';
+
+  if (weekday) {
+    text += 'Weekdays: ';
+    const weekdaySlots = [];
+    if (weekday.morning) weekdaySlots.push('Morning (8AM-12PM)');
+    if (weekday.afternoon) weekdaySlots.push('Afternoon (12PM-6PM)');
+    if (weekday.evening) weekdaySlots.push('Evening (6PM-10PM)');
+    text += weekdaySlots.join(', ') + '\n';
+  }
+
+  if (weekend) {
+    text += 'Weekends: ';
+    const weekendSlots = [];
+    if (weekend.morning) weekendSlots.push('Morning (8AM-12PM)');
+    if (weekend.afternoon) weekendSlots.push('Afternoon (12PM-6PM)');
+    if (weekend.evening) weekendSlots.push('Evening (6PM-10PM)');
+    text += weekendSlots.join(', ');
+  }
+
+  return text;
 }

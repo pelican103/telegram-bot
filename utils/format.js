@@ -151,70 +151,111 @@ export function formatTutorProfile(tutor) {
 }
 
 export function formatAssignment(assignment) {
-  let msg = `*Assignment #${assignment.assignmentNumber || assignment._id.toString().slice(-6)}*\n\n`;
+  const {
+    title,
+    level,
+    subject,
+    location,
+    frequency,
+    duration,
+    rate,
+    rateType,
+    studentGender,
+    studentCount,
+    tutorRequirements,
+    preferredTiming,
+    additionalDetails,
+    notes,
+    status,
+    startDate,
+    deadline
+  } = assignment;
+
+  let text = `📝 *${title}*\n\n`;
   
   // Basic Information
-  msg += `*Subject:* ${assignment.subject || 'Not specified'}\n`;
-  msg += `*Level:* ${assignment.level || 'Not specified'}\n`;
-  msg += `*Student Gender:* ${assignment.studentGender || 'Not specified'}\n`;
-  msg += `*Location:* ${assignment.location || 'Not specified'}\n`;
+  text += `*Education Level:* ${level}\n`;
+  text += `*Subject:* ${subject}\n`;
+  text += `*Location:* ${location}\n\n`;
   
-  // Timing
-  if (assignment.timing || assignment.preferredTiming) {
-    msg += `*Timing:* ${assignment.timing || assignment.preferredTiming}\n`;
-  }
+  // Schedule
+  text += `*Schedule:*\n`;
+  text += `• Frequency: ${frequency}\n`;
+  text += `• Duration: ${duration} hours\n`;
+  text += `• Preferred Timing:\n`;
   
-  if (assignment.frequency) {
-    msg += `*Frequency:* ${assignment.frequency}\n`;
-  }
-  
-  if (assignment.duration) {
-    msg += `*Duration:* ${assignment.duration}\n`;
-  }
-  
-  // Rate
-  if (assignment.rate || assignment.hourlyRate) {
-    const rate = assignment.rate || assignment.hourlyRate;
-    msg += `*Rate:* $${rate}${assignment.rateType ? `/${assignment.rateType}` : '/hour'}\n`;
-  }
-  
-  // Requirements
-  if (assignment.tutorRequirements || assignment.requirements) {
-    const requirements = assignment.tutorRequirements || assignment.requirements;
-    msg += `*Tutor Requirements:*\n`;
-    
-    if (typeof requirements === 'object') {
-      if (requirements.gender) msg += `• Gender: ${requirements.gender}\n`;
-      if (requirements.race) msg += `• Race: ${requirements.race}\n`;
-      if (requirements.experience) msg += `• Experience: ${requirements.experience}\n`;
-      if (requirements.qualifications) msg += `• Qualifications: ${requirements.qualifications}\n`;
-    } else if (typeof requirements === 'string') {
-      msg += `${requirements}\n`;
+  // Format preferred timing
+  if (preferredTiming) {
+    const { weekday, weekend } = preferredTiming;
+    if (weekday) {
+      text += '  Weekdays:\n';
+      if (weekday.morning) text += '    - Morning (8AM-12PM)\n';
+      if (weekday.afternoon) text += '    - Afternoon (12PM-6PM)\n';
+      if (weekday.evening) text += '    - Evening (6PM-10PM)\n';
+    }
+    if (weekend) {
+      text += '  Weekends:\n';
+      if (weekend.morning) text += '    - Morning (8AM-12PM)\n';
+      if (weekend.afternoon) text += '    - Afternoon (12PM-6PM)\n';
+      if (weekend.evening) text += '    - Evening (6PM-10PM)\n';
     }
   }
   
-  // Additional Details
-  if (assignment.additionalDetails || assignment.notes) {
-    msg += `*Additional Details:*\n${assignment.additionalDetails || assignment.notes}\n`;
+  // Student Information
+  text += `\n*Student Information:*\n`;
+  text += `• Gender: ${studentGender}\n`;
+  text += `• Number of Students: ${studentCount}\n\n`;
+  
+  // Rate Information
+  text += `*Rate:* $${rate}/${rateType}\n\n`;
+  
+  // Tutor Requirements
+  if (tutorRequirements) {
+    text += `*Tutor Requirements:*\n`;
+    if (tutorRequirements.gender) text += `• Gender: ${tutorRequirements.gender}\n`;
+    if (tutorRequirements.race) text += `• Race: ${tutorRequirements.race}\n`;
+    if (tutorRequirements.experience) text += `• Experience: ${tutorRequirements.experience}\n`;
+    if (tutorRequirements.qualifications) text += `• Qualifications: ${tutorRequirements.qualifications}\n`;
+    text += '\n';
   }
   
-  // Status and dates
-  msg += `\n*Status:* ${assignment.status || 'Open'}`;
-  
-  if (assignment.createdAt) {
-    msg += `\n*Posted:* ${new Date(assignment.createdAt).toLocaleDateString()}`;
+  // Additional Information
+  if (additionalDetails) {
+    text += `*Additional Details:*\n${additionalDetails}\n\n`;
   }
   
-  if (assignment.deadline) {
-    msg += `\n*Deadline:* ${new Date(assignment.deadline).toLocaleDateString()}`;
+  if (notes) {
+    text += `*Notes:*\n${notes}\n\n`;
   }
   
-  // Application count
-  if (assignment.applicants && assignment.applicants.length > 0) {
-    msg += `\n*Applications:* ${assignment.applicants.length}`;
+  // Status and Dates
+  text += `*Status:* ${status}\n`;
+  if (startDate) {
+    text += `*Start Date:* ${new Date(startDate).toLocaleDateString()}\n`;
+  }
+  if (deadline) {
+    text += `*Application Deadline:* ${new Date(deadline).toLocaleDateString()}\n`;
   }
   
-  return msg;
+  return text;
+}
+
+export function formatAssignmentsList(assignments) {
+  if (!assignments || assignments.length === 0) {
+    return 'No assignments found matching your criteria.';
+  }
+
+  let text = `Found ${assignments.length} assignment(s):\n\n`;
+  
+  assignments.forEach((assignment, index) => {
+    text += `${index + 1}. *${assignment.title}*\n`;
+    text += `   ${assignment.level} - ${assignment.subject}\n`;
+    text += `   Location: ${assignment.location}\n`;
+    text += `   Rate: $${assignment.rate}/${assignment.rateType}\n`;
+    text += `   Status: ${assignment.status}\n\n`;
+  });
+  
+  return text;
 }
 
 export function formatApplicationStatus(application, assignment) {
