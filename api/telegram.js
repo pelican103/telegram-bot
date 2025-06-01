@@ -2,6 +2,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import mongoose from 'mongoose';
 import Tutor from '../models/Tutor.js';
 import Assignment from '../models/Assignment.js';
+import * as handlers from '../bot/handlers.js';
 
 let bot = null;
 let isConnected = false;
@@ -12,67 +13,16 @@ const ADMIN_USERS = process.env.ADMIN_USERS ? process.env.ADMIN_USERS.split(',')
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const BOT_USERNAME = process.env.BOT_USERNAME;
 
-// Store handlers reference
-let handlers = null;
-
-async function connectToDatabase() {
-  if (!isConnected) {
-    try {
-      await mongoose.connect(process.env.MONGODB_URI, {
-        maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
-      });
-      isConnected = true;
-      console.log('✅ MongoDB connected (Vercel)');
-    } catch (error) {
-      console.error('❌ MongoDB connection failed:', error);
-      throw error;
-    }
-  }
-}
-
-function getBot() {
-  if (!bot) {
-    console.log('🤖 Initializing Telegram bot...');
-    if (!process.env.BOT_TOKEN) {
-      throw new Error('BOT_TOKEN environment variable is required');
-    }
-    bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
-    console.log('📛 Using bot token starts with:', process.env.BOT_TOKEN?.slice(0, 8));
-    console.log('🤖 Bot initialized successfully');
-  }
-  return bot;
-}
-
-// Load handlers dynamically
-async function loadHandlers() {
-  if (!handlers) {
-    try {
-      const handlersModule = await import('../bot/handlers.js');
-      handlers = handlersModule.default;
-      console.log('✅ Handlers loaded successfully');
-      console.log('🔍 Available handler functions:', Object.keys(handlers));
-    } catch (error) {
-      console.error('❌ Failed to load handlers:', error);
-      throw error;
-    }
-  }
-  return handlers;
-}
-
 // Main update handler
 async function handleUpdate(botInstance, context, update) {
   try {
-    const handlers = await loadHandlers();
-    
     console.log('📨 Processing update:', JSON.stringify(update, null, 2));
     
     // Handle different types of updates
     if (update.message) {
-      await handleMessage(botInstance, context, update.message, handlers);
+      await handleMessage(botInstance, context, update.message);
     } else if (update.callback_query) {
-      await handleCallbackQuery(botInstance, context, update.callback_query, handlers);
+      await handleCallbackQuery(botInstance, context, update.callback_query);
     }
     
   } catch (error) {
@@ -82,7 +32,7 @@ async function handleUpdate(botInstance, context, update) {
 }
 
 // Handle regular messages
-async function handleMessage(botInstance, context, message, handlers) {
+async function handleMessage(botInstance, context, message) {
   const chatId = message.chat.id;
   const userId = message.from.id;
   const text = message.text;
@@ -128,7 +78,7 @@ async function handleMessage(botInstance, context, message, handlers) {
     
     // Handle profile editing states
     if (userSession?.state?.startsWith('awaiting_')) {
-      await handleProfileInput(botInstance, chatId, text, context, handlers);
+      await handleProfileInput(botInstance, chatId, text, context);
       return;
     }
     
@@ -142,7 +92,7 @@ async function handleMessage(botInstance, context, message, handlers) {
 }
 
 // Handle callback queries (button presses)
-async function handleCallbackQuery(botInstance, context, callbackQuery, handlers) {
+async function handleCallbackQuery(botInstance, context, callbackQuery) {
   const chatId = callbackQuery.message.chat.id;
   const userId = callbackQuery.from.id;
   const data = callbackQuery.data;
@@ -252,19 +202,19 @@ async function handleCallbackQuery(botInstance, context, callbackQuery, handlers
     
     // Handle specific field edits
     if (data.startsWith('edit_')) {
-      await handleFieldEdit(botInstance, chatId, userId, data, handlers);
+      await handleFieldEdit(botInstance, chatId, userId, data);
       return;
     }
     
     // Handle toggles (locations, availability, subjects)
     if (data.startsWith('toggle_')) {
-      await handleToggle(botInstance, chatId, userId, data, handlers);
+      await handleToggle(botInstance, chatId, userId, data);
       return;
     }
     
     // Handle dropdown selections (gender, race, education)
     if (data.startsWith('set_')) {
-      await handleSelection(botInstance, chatId, userId, data, handlers);
+      await handleSelection(botInstance, chatId, userId, data);
       return;
     }
     
@@ -278,7 +228,7 @@ async function handleCallbackQuery(botInstance, context, callbackQuery, handlers
 }
 
 // Handle profile input
-async function handleProfileInput(botInstance, chatId, text, context, handlers) {
+async function handleProfileInput(botInstance, chatId, text, context) {
   const userSession = userSessions[chatId];
   const field = userSession.state.replace('awaiting_', '');
   
@@ -308,7 +258,7 @@ async function handleProfileInput(botInstance, chatId, text, context, handlers) 
 }
 
 // Handle field editing
-async function handleFieldEdit(botInstance, chatId, userId, data, handlers) {
+async function handleFieldEdit(botInstance, chatId, userId, data) {
   try {
     const fieldMappings = {
       'edit_fullName': { field: 'fullName', prompt: 'Enter your full name:' },
@@ -368,7 +318,7 @@ async function handleFieldEdit(botInstance, chatId, userId, data, handlers) {
 }
 
 // Handle toggles
-async function handleToggle(botInstance, chatId, userId, data, handlers) {
+async function handleToggle(botInstance, chatId, userId, data) {
   try {
     const tutor = await Tutor.findOne({ userId: userId });
     if (!tutor) {
@@ -445,7 +395,7 @@ async function handleToggle(botInstance, chatId, userId, data, handlers) {
 }
 
 // Handle selections
-async function handleSelection(botInstance, chatId, userId, data, handlers) {
+async function handleSelection(botInstance, chatId, userId, data) {
   try {
     const tutor = await Tutor.findOne({ userId: userId });
     if (!tutor) {

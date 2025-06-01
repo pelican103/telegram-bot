@@ -690,464 +690,452 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
   try {
     switch (currentStep) {
       case 'title':
-        assignmentData.title = text.trim();
+        assignmentData.title = text;
         session.currentStep = 'level';
-        await safeSend(bot, chatId, '📚 Step 2 of 9: Enter the level (e.g., Primary 6, Secondary 3, JC 1):', {
-          reply_markup: {// Continuing from where the code was cut off...
-
+        
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 2 of 9: Enter the education level (e.g., Primary 6, Secondary 1, JC 2):', {
+          parse_mode: 'Markdown',
+          reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
           }
         });
         break;
-        
+      
       case 'level':
         try {
           assignmentData.level = validateLevel(text);
           session.currentStep = 'subject';
-          await safeSend(bot, chatId, '📖 Step 3 of 9: Enter the subject (e.g., Math, English, Physics):', {
+          
+          await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 3 of 9: Enter the subject:', {
+            parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
             }
           });
         } catch (error) {
-          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid level:`);
+          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid education level:`, {
+            reply_markup: {
+              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
+            }
+          });
         }
         break;
-        
+      
       case 'subject':
-        assignmentData.subject = text.trim();
+        assignmentData.subject = text;
         session.currentStep = 'location';
-        await safeSend(bot, chatId, '📍 Step 4 of 9: Enter the location (e.g., Jurong West, Tampines, Online):', {
+        
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 4 of 9: Enter the location:', {
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
           }
         });
         break;
-        
+      
       case 'location':
-        assignmentData.location = text.trim();
+        assignmentData.location = text;
         session.currentStep = 'rate';
-        await safeSend(bot, chatId, '💰 Step 5 of 9: Enter the hourly rate (number only, e.g., 25):', {
+        
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 5 of 9: Enter the hourly rate (numbers only, e.g., 50):', {
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
           }
         });
         break;
-        
+      
       case 'rate':
-        const rate = parseFloat(text);
+        const rate = parseInt(text);
         if (isNaN(rate) || rate <= 0) {
-          await safeSend(bot, chatId, '❌ Please enter a valid hourly rate (number only):');
+          await safeSend(bot, chatId, '❌ Please enter a valid hourly rate (numbers only):');
           return;
         }
         assignmentData.rate = rate;
         session.currentStep = 'frequency';
-        await safeSend(bot, chatId, '📅 Step 6 of 9: Enter the frequency (e.g., "Once a week", "Twice a week", "3 times a week"):', {
+        
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 6 of 9: Enter the frequency (e.g., Once a week, Twice a week):', {
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
           }
         });
         break;
-        
+      
       case 'frequency':
         try {
           assignmentData.frequency = validateFrequency(text);
           session.currentStep = 'duration';
-          await safeSend(bot, chatId, '⏱️ Step 7 of 9: Enter the duration per session (e.g., "1.5 hours", "2 hours"):', {
+          
+          await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 7 of 9: Enter the session duration (e.g., 1.5 hours, 2 hours):', {
+            parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
             }
           });
         } catch (error) {
-          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid frequency:`);
+          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid frequency:`, {
+            reply_markup: {
+              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
+            }
+          });
         }
         break;
-        
+      
       case 'duration':
-        assignmentData.duration = text.trim();
+        assignmentData.duration = text;
         session.currentStep = 'startDate';
-        await safeSend(bot, chatId, '🚀 Step 8 of 9: Enter the start date (e.g., "next Monday", "tomorrow", "2024-12-15"):', {
+        
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 8 of 9: Enter the start date (e.g., today, tomorrow, next monday, 2024-12-15):', {
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
           }
         });
         break;
-        
+      
       case 'startDate':
         try {
           const startDate = parseNaturalDate(text);
-          assignmentData.startDate = startDate.toDateString();
+          assignmentData.startDate = startDate.toLocaleDateString('en-SG');
           session.currentStep = 'description';
-          await safeSend(bot, chatId, '📝 Step 9 of 9: Enter additional description (or type "skip" to skip):', {
+          
+          await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 9 of 9: Enter additional description (or type "skip" to skip):', {
+            parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
             }
           });
         } catch (error) {
-          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid start date:`);
+          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid date:`, {
+            reply_markup: {
+              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
+            }
+          });
         }
         break;
-        
+      
       case 'description':
-        if (text.toLowerCase().trim() !== 'skip') {
-          assignmentData.description = text.trim();
+        if (text.toLowerCase() !== 'skip') {
+          assignmentData.description = text;
         }
         
-        // Create the assignment
-        await createAssignment(bot, chatId, assignmentData, userSessions);
+        // Show confirmation
+        assignmentData.status = 'Open';
+        assignmentData.studentCount = 1;
+        assignmentData.rateType = 'hour';
+        
+        const confirmationMsg = formatAssignment(assignmentData);
+        await safeSend(bot, chatId, `📋 *Assignment Preview*\n\n${confirmationMsg}\n\nIs this correct?`, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '✅ Post Assignment', callback_data: 'confirm_post_assignment' }],
+              [{ text: '❌ Cancel', callback_data: 'admin_panel' }]
+            ]
+          }
+        });
         break;
     }
   } catch (error) {
     console.error('Error in assignment step:', error);
-    await safeSend(bot, chatId, 'There was an error processing your input. Please try again.');
-  }
-}
-
-// Create assignment and post to channel
-async function createAssignment(bot, chatId, assignmentData, userSessions) {
-  try {
-    // Create assignment object
-    const assignment = new Assignment({
-      title: assignmentData.title,
-      level: assignmentData.level,
-      subject: assignmentData.subject,
-      location: assignmentData.location,
-      rate: assignmentData.rate,
-      rateType: 'hour',
-      frequency: assignmentData.frequency,
-      duration: assignmentData.duration,
-      startDate: assignmentData.startDate,
-      description: assignmentData.description || '',
-      status: 'Open',
-      studentCount: assignmentData.studentCount || 1,
-      createdAt: new Date(),
-      applications: []
-    });
-    
-    await assignment.save();
-    
-    // Format assignment for admin confirmation
-    const assignmentMsg = formatAssignment(assignment);
-    
-    await safeSend(bot, chatId, `✅ Assignment created successfully!\n\n${assignmentMsg}`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '📢 Post to Channel', callback_data: `post_to_channel_${assignment._id}` }],
-          [{ text: '🔙 Back to Admin Panel', callback_data: 'admin_panel' }]
-        ]
-      }
-    });
-    
-    // Clear session
+    await safeSend(bot, chatId, '❌ An error occurred. Please try again.');
     delete userSessions[chatId].state;
     delete userSessions[chatId].assignmentData;
     delete userSessions[chatId].currentStep;
-    
-  } catch (error) {
-    console.error('Error creating assignment:', error);
-    await safeSend(bot, chatId, 'There was an error creating the assignment. Please try again.');
   }
 }
 
 // Post assignment to channel
-async function postAssignmentToChannel(bot, chatId, assignmentId, CHANNEL_ID, BOT_USERNAME) {
+async function postAssignmentToChannel(bot, assignment, channelId, botUsername) {
   try {
-    const assignment = await Assignment.findById(assignmentId);
-    if (!assignment) {
-      await safeSend(bot, chatId, 'Assignment not found.');
-      return;
-    }
+    const message = formatAssignmentForChannel(assignment, botUsername);
     
-    const channelMsg = formatAssignmentForChannel(assignment, BOT_USERNAME);
-    
-    const keyboard = {
-      inline_keyboard: [
-        [{ text: '🎯 Apply for this Assignment', url: `https://t.me/${BOT_USERNAME}?start=apply_${assignment._id}` }]
-      ]
-    };
-    
-    await bot.sendMessage(CHANNEL_ID, channelMsg, {
+    const result = await bot.sendMessage(channelId, message, {
       parse_mode: 'Markdown',
-      reply_markup: keyboard
-    });
-    
-    await safeSend(bot, chatId, '✅ Assignment posted to channel successfully!', {
       reply_markup: {
-        inline_keyboard: [
-          [{ text: '🔙 Back to Admin Panel', callback_data: 'admin_panel' }]
-        ]
+        inline_keyboard: [[
+          { text: '📝 Apply for this Assignment', url: `https://t.me/${botUsername}?start=apply_${assignment._id}` }
+        ]]
       }
     });
     
+    return result;
   } catch (error) {
     console.error('Error posting to channel:', error);
-    await safeSend(bot, chatId, 'There was an error posting to the channel. Please try again.');
+    throw error;
   }
 }
 
-// Handle start parameter (for assignment applications)
-async function handleStartParameter(bot, chatId, userId, startParam, Assignment, Tutor, userSessions, ADMIN_USERS) {
-  try {
-    if (startParam.startsWith('apply_')) {
-      const assignmentId = startParam.replace('apply_', '');
-      
-      // Check if tutor profile exists and is complete
-      const tutor = await Tutor.findOne({ userId: userId });
-      if (!tutor) {
-        await safeSend(bot, chatId, '👋 Welcome! To apply for assignments, you need to set up your profile first. Please share your contact number to get started.', {
-          reply_markup: {
-            keyboard: [[{
-              text: '📞 Share Contact Number',
-              request_contact: true
-            }]],
-            one_time_keyboard: true,
-            resize_keyboard: true
-          }
-        });
-        
-        userSessions[chatId] = { 
-          state: 'awaiting_contact',
-          pendingAssignmentId: assignmentId 
-        };
-        return;
-      }
-      
-      // Set up session
-      userSessions[chatId] = { tutorId: tutor._id };
-      
-      // Show assignment and apply
-      await handleAssignmentApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions, ADMIN_USERS);
-    }
-  } catch (error) {
-    console.error('Error handling start parameter:', error);
-    await safeSend(bot, chatId, 'There was an error processing your request. Please try again.');
-  }
-}
-
-// Handle assignment application
-async function handleAssignmentApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions, ADMIN_USERS) {
+// Handle assignment applications
+async function handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions) {
   try {
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) {
-      await safeSend(bot, chatId, 'Assignment not found or no longer available.');
+      await safeSend(bot, chatId, '❌ Assignment not found or may have been removed.');
       return;
     }
     
     if (assignment.status !== 'Open') {
-      await safeSend(bot, chatId, 'This assignment is no longer accepting applications.');
+      await safeSend(bot, chatId, '❌ This assignment is no longer available.');
       return;
     }
     
-    const tutor = await Tutor.findOne({ userId: userId });
-    if (!tutor) {
-      await safeSend(bot, chatId, 'Please complete your profile first before applying.');
-      return;
-    }
-    
-    // Check if already applied
-    const existingApplication = assignment.applications.find(app => app.tutorId.toString() === tutor._id.toString());
+    // Check if user already applied
+    const existingApplication = assignment.applications.find(app => app.tutorId.toString() === userSessions[chatId].tutorId);
     if (existingApplication) {
-      await safeSend(bot, chatId, `You have already applied for this assignment. Status: ${existingApplication.status}`);
+      await safeSend(bot, chatId, '⚠️ You have already applied for this assignment.');
       return;
     }
     
-    // Show assignment details
-    const assignmentMsg = formatAssignment(assignment);
-    await safeSend(bot, chatId, assignmentMsg, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '✅ Confirm Application', callback_data: `confirm_apply_${assignmentId}` }],
-          [{ text: '❌ Cancel', callback_data: 'view_assignments' }]
-        ]
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error handling assignment application:', error);
-    await safeSend(bot, chatId, 'There was an error processing your application. Please try again.');
-  }
-}
-
-// Handle confirmed application
-async function handleConfirmApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions) {
-  try {
-    const assignment = await Assignment.findById(assignmentId);
-    const tutor = await Tutor.findOne({ userId: userId });
-    
-    if (!assignment || !tutor) {
-      await safeSend(bot, chatId, 'Assignment or profile not found.');
+    // Get tutor details
+    const tutor = await Tutor.findById(userSessions[chatId].tutorId);
+    if (!tutor) {
+      await safeSend(bot, chatId, '❌ Please complete your profile before applying.');
       return;
     }
     
-    // Add application to assignment
+    // Add application
     assignment.applications.push({
       tutorId: tutor._id,
       tutorName: tutor.fullName,
       tutorContact: tutor.contactNumber,
-      appliedAt: new Date(),
-      status: 'Pending'
+      appliedAt: new Date()
     });
     
     await assignment.save();
     
-    await safeSend(bot, chatId, '✅ Application submitted successfully! You will be notified when the admin reviews your application.', {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '📋 View My Applications', callback_data: 'view_applications' }],
-          [{ text: '🏠 Main Menu', callback_data: 'main_menu' }]
-        ]
-      }
+    const assignmentMsg = formatAssignment(assignment);
+    await safeSend(bot, chatId, `✅ *Application Submitted Successfully!*\n\n${assignmentMsg}`, {
+      parse_mode: 'Markdown'
     });
     
-    // Notify admins (optional)
-    // You can implement admin notification here
+    // Show main menu
+    await showMainMenu(chatId, bot, userId, process.env.ADMIN_USERS?.split(',') || []);
     
   } catch (error) {
-    console.error('Error confirming application:', error);
-    await safeSend(bot, chatId, 'There was an error submitting your application. Please try again.');
+    console.error('Error handling application:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while submitting your application. Please try again.');
   }
 }
 
-// Show available assignments
-async function showAssignments(chatId, bot, Assignment, userSessions, page = 1) {
+// Handle start parameters (for assignment applications)
+async function handleStartParameter(bot, chatId, userId, startParam, Assignment, Tutor, userSessions, ADMIN_USERS) {
   try {
-    const limit = ITEMS_PER_PAGE;
-    const skip = (page - 1) * limit;
-    
+    if (startParam.startsWith('apply_')) {
+      const assignmentId = startParam.replace('apply_', '');
+      await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
+    } else {
+      // Show main menu for unknown parameters
+      await showMainMenu(chatId, bot, userId, ADMIN_USERS);
+    }
+  } catch (error) {
+    console.error('Error handling start parameter:', error);
+    await safeSend(bot, chatId, '❌ An error occurred. Please try again.');
+    await showMainMenu(chatId, bot, userId, ADMIN_USERS);
+  }
+}
+
+// View assignments with pagination
+async function viewAssignments(bot, chatId, page = 0, Assignment) {
+  try {
+    const totalAssignments = await Assignment.countDocuments({ status: 'Open' });
     const assignments = await Assignment.find({ status: 'Open' })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-    
-    const totalCount = await Assignment.countDocuments({ status: 'Open' });
-    const totalPages = Math.ceil(totalCount / limit);
+      .skip(page * ITEMS_PER_PAGE)
+      .limit(ITEMS_PER_PAGE)
+      .sort({ createdAt: -1 });
     
     if (assignments.length === 0) {
-      await safeSend(bot, chatId, 'No assignments available at the moment.', {
+      await safeSend(bot, chatId, '📋 No assignments available at the moment. Check back later!', {
         reply_markup: {
-          inline_keyboard: [
-            [{ text: '🏠 Main Menu', callback_data: 'main_menu' }]
-          ]
+          inline_keyboard: [[{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]]
         }
       });
       return;
     }
     
-    let msg = `📋 *Available Assignments* (Page ${page}/${totalPages})\n\n`;
+    // Create pagination buttons
+    const buttons = [];
+    const totalPages = Math.ceil(totalAssignments / ITEMS_PER_PAGE);
     
-    const keyboard = [];
+    if (totalPages > 1) {
+      const paginationRow = [];
+      if (page > 0) {
+        paginationRow.push({ text: '⬅️ Previous', callback_data: `assignments_page_${page - 1}` });
+      }
+      if (page < totalPages - 1) {
+        paginationRow.push({ text: 'Next ➡️', callback_data: `assignments_page_${page + 1}` });
+      }
+      if (paginationRow.length > 0) {
+        buttons.push(paginationRow);
+      }
+    }
+    
+    buttons.push([{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]);
+    
+    // Format assignments message
+    let message = `📋 *Available Assignments* (Page ${page + 1}/${totalPages})\n\n`;
+    
     assignments.forEach((assignment, index) => {
-      msg += `${skip + index + 1}. *${assignment.title}*\n`;
-      msg += `   📚 ${assignment.level} - ${assignment.subject}\n`;
-      msg += `   📍 ${assignment.location}\n`;
-      msg += `   💰 $${assignment.rate}/hour\n`;
-      msg += `   📅 ${assignment.frequency}\n\n`;
+      const assignmentNum = page * ITEMS_PER_PAGE + index + 1;
+      message += `*${assignmentNum}. ${assignment.title || 'Assignment'}*\n`;
+      message += `📚 Level: ${assignment.level}\n`;
+      message += `📖 Subject: ${assignment.subject}\n`;
+      message += `📍 Location: ${assignment.location}\n`;
+      message += `💰 Rate: $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
+      message += `📅 Frequency: ${assignment.frequency}\n`;
+      message += `🚀 Start: ${assignment.startDate}\n`;
       
-      keyboard.push([{ text: `🎯 Apply - ${assignment.title}`, callback_data: `apply_${assignment._id}` }]);
+      // Add apply button for each assignment
+      buttons.splice(-1, 0, [{ text: `📝 Apply for Assignment ${assignmentNum}`, callback_data: `apply_${assignment._id}` }]);
+      
+      message += '\n';
     });
     
-    // Add pagination buttons
-    const paginationRow = [];
-    if (page > 1) {
-      paginationRow.push({ text: '⬅️ Previous', callback_data: `assignments_page_${page - 1}` });
-    }
-    if (page < totalPages) {
-      paginationRow.push({ text: 'Next ➡️', callback_data: `assignments_page_${page + 1}` });
-    }
-    
-    if (paginationRow.length > 0) {
-      keyboard.push(paginationRow);
-    }
-    
-    keyboard.push([{ text: '🏠 Main Menu', callback_data: 'main_menu' }]);
-    
-    await safeSend(bot, chatId, msg, {
+    await safeSend(bot, chatId, message, {
       parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: keyboard }
+      reply_markup: { inline_keyboard: buttons }
     });
     
   } catch (error) {
-    console.error('Error showing assignments:', error);
-    await safeSend(bot, chatId, 'There was an error loading assignments. Please try again.');
+    console.error('Error viewing assignments:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while loading assignments. Please try again.');
   }
 }
 
-// Show user's applications
-async function showApplications(chatId, bot, Assignment, userSessions, page = 1) {
+// View user's applications
+async function viewMyApplications(bot, chatId, userSessions, Assignment) {
   try {
-    const userSession = userSessions[chatId];
-    if (!userSession || !userSession.tutorId) {
-      await safeSend(bot, chatId, 'Your session has expired. Please start again with /start');
-      return;
-    }
-    
-    const limit = ITEMS_PER_PAGE;
-    const skip = (page - 1) * limit;
-    
+    const tutorId = userSessions[chatId].tutorId;
     const assignments = await Assignment.find({
-      'applications.tutorId': userSession.tutorId
-    }).sort({ createdAt: -1 }).skip(skip).limit(limit);
-    
-    const totalCount = await Assignment.countDocuments({
-      'applications.tutorId': userSession.tutorId
-    });
-    const totalPages = Math.ceil(totalCount / limit);
+      'applications.tutorId': tutorId
+    }).sort({ createdAt: -1 });
     
     if (assignments.length === 0) {
-      await safeSend(bot, chatId, 'You have not applied for any assignments yet.', {
+      await safeSend(bot, chatId, '📋 You haven\'t applied for any assignments yet.', {
         reply_markup: {
           inline_keyboard: [
             [{ text: '📋 View Available Assignments', callback_data: 'view_assignments' }],
-            [{ text: '🏠 Main Menu', callback_data: 'main_menu' }]
+            [{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]
           ]
         }
       });
       return;
     }
     
-    let msg = `📝 *My Applications* (Page ${page}/${totalPages})\n\n`;
+    let message = `📋 *My Applications*\n\n`;
     
     assignments.forEach((assignment, index) => {
-      const application = assignment.applications.find(app => app.tutorId.toString() === userSession.tutorId);
-      msg += `${skip + index + 1}. *${assignment.title}*\n`;
-      msg += `   📚 ${assignment.level} - ${assignment.subject}\n`;
-      msg += `   📍 ${assignment.location}\n`;
-      msg += `   💰 $${assignment.rate}/hour\n`;
-      msg += `   ⭐ Status: ${application.status}\n\n`;
+      const myApplication = assignment.applications.find(app => app.tutorId.toString() === tutorId);
+      
+      message += `*${index + 1}. ${assignment.title || 'Assignment'}*\n`;
+      message += `📚 Level: ${assignment.level}\n`;
+      message += `📖 Subject: ${assignment.subject}\n`;
+      message += `📍 Location: ${assignment.location}\n`;
+      message += `💰 Rate: $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
+      message += `📅 Applied: ${myApplication.appliedAt.toLocaleDateString('en-SG')}\n`;
+      message += `🔄 Status: ${assignment.status}\n\n`;
     });
     
-    const keyboard = [];
-    
-    // Add pagination buttons
-    const paginationRow = [];
-    if (page > 1) {
-      paginationRow.push({ text: '⬅️ Previous', callback_data: `applications_page_${page - 1}` });
-    }
-    if (page < totalPages) {
-      paginationRow.push({ text: 'Next ➡️', callback_data: `applications_page_${page + 1}` });
-    }
-    
-    if (paginationRow.length > 0) {
-      keyboard.push(paginationRow);
-    }
-    
-    keyboard.push([{ text: '🏠 Main Menu', callback_data: 'main_menu' }]);
-    
-    await safeSend(bot, chatId, msg, {
+    await safeSend(bot, chatId, message, {
       parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: keyboard }
+      reply_markup: {
+        inline_keyboard: [[{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]]
+      }
     });
     
   } catch (error) {
-    console.error('Error showing applications:', error);
-    await safeSend(bot, chatId, 'There was an error loading your applications. Please try again.');
+    console.error('Error viewing applications:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while loading your applications. Please try again.');
   }
 }
 
-// Export all functions
-export default {
+// Admin view all applications
+async function adminViewAllApplications(bot, chatId, Assignment) {
+  try {
+    const assignments = await Assignment.find({
+      applications: { $exists: true, $not: { $size: 0 } }
+    }).sort({ createdAt: -1 });
+    
+    if (assignments.length === 0) {
+      await safeSend(bot, chatId, '📋 No applications found.', {
+        reply_markup: {
+          inline_keyboard: [[{ text: '🔙 Back to Admin Panel', callback_data: 'admin_panel' }]]
+        }
+      });
+      return;
+    }
+    
+    let message = `📊 *All Applications*\n\n`;
+    
+    assignments.forEach((assignment, index) => {
+      message += `*${index + 1}. ${assignment.title || 'Assignment'}*\n`;
+      message += `📚 ${assignment.level} - ${assignment.subject}\n`;
+      message += `📍 ${assignment.location}\n`;
+      message += `👥 Applications: ${assignment.applications.length}\n`;
+      
+      assignment.applications.forEach((app, appIndex) => {
+        message += `  ${appIndex + 1}. ${app.tutorName} (${app.tutorContact})\n`;
+      });
+      
+      message += '\n';
+    });
+    
+    await safeSend(bot, chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🔙 Back to Admin Panel', callback_data: 'admin_panel' }]]
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error viewing all applications:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while loading applications. Please try again.');
+  }
+}
+
+// Admin manage assignments
+async function adminManageAssignments(bot, chatId, Assignment) {
+  try {
+    const assignments = await Assignment.find().sort({ createdAt: -1 }).limit(10);
+    
+    if (assignments.length === 0) {
+      await safeSend(bot, chatId, '📋 No assignments found.', {
+        reply_markup: {
+          inline_keyboard: [[{ text: '🔙 Back to Admin Panel', callback_data: 'admin_panel' }]]
+        }
+      });
+      return;
+    }
+    
+    let message = `📋 *Manage Assignments*\n\n`;
+    const buttons = [];
+    
+    assignments.forEach((assignment, index) => {
+      message += `*${index + 1}. ${assignment.title || 'Assignment'}*\n`;
+      message += `📚 ${assignment.level} - ${assignment.subject}\n`;
+      message += `🔄 Status: ${assignment.status}\n`;
+      message += `👥 Applications: ${assignment.applications.length}\n\n`;
+      
+      buttons.push([{ text: `✏️ Edit Assignment ${index + 1}`, callback_data: `edit_assignment_${assignment._id}` }]);
+    });
+    
+    buttons.push([{ text: '🔙 Back to Admin Panel', callback_data: 'admin_panel' }]);
+    
+    await safeSend(bot, chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: buttons }
+    });
+    
+  } catch (error) {
+    console.error('Error managing assignments:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while loading assignments. Please try again.');
+  }
+}
+
+// Export all functions (ES modules)
+export {
+  // Utility functions
   normalizePhone,
   parseNaturalDate,
   validateLevel,
@@ -1156,9 +1144,13 @@ export default {
   initializeAvailability,
   initializeLocations,
   getTick,
+  
+  // Format functions
   formatTutorProfile,
   formatAssignment,
   formatAssignmentForChannel,
+  
+  // Menu functions
   getMainEditProfileMenu,
   getPersonalInfoMenu,
   getTeachingLevelsMenu,
@@ -1172,6 +1164,8 @@ export default {
   getRaceMenu,
   getEducationMenu,
   getHourlyRatesMenu,
+  
+  // Core handler functions
   safeSend,
   isAdmin,
   handleStart,
@@ -1180,11 +1174,14 @@ export default {
   showAdminPanel,
   startAssignmentCreation,
   handleAssignmentStep,
-  createAssignment,
   postAssignmentToChannel,
+  handleApplication,
   handleStartParameter,
-  handleAssignmentApplication,
-  handleConfirmApplication,
-  showAssignments,
-  showApplications
+  viewAssignments,
+  viewMyApplications,
+  adminViewAllApplications,
+  adminManageAssignments,
+  
+  // Constants
+  ITEMS_PER_PAGE
 };
