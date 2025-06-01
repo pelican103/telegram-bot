@@ -552,7 +552,7 @@ async function handleStart(bot, chatId, userId, Tutor, userSessions, startParam 
     }
     
     // Existing user - set up session
-    userSessions[chatId] = { tutorId: tutor._id };
+    userSessions[chatId] = { tutorId: tutor._id, contactNumber: phoneNumber};
     
     if (startParam) {
       await handleStartParameter(bot, chatId, userId, startParam, Assignment, Tutor, userSessions, ADMIN_USERS);
@@ -611,7 +611,7 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
     }
     
     // Set up session
-    userSessions[chatId] = { tutorId: tutor._id };
+    userSessions[chatId] = { tutorId: tutor._id, contactNumber: phoneNumber };
     
     // Handle start parameter if exists
     const startParam = userSessions[chatId].startParam;
@@ -1162,17 +1162,31 @@ async function handleCallbackQuery(
 
     // Profile editing
     if (data === 'profile_edit') {
-      const tutor = await Tutor.findOne({ userId }) || await Tutor.findOne({ chatId });
-      if (!tutor) {
-        return await safeSend(bot, chatId, 'Profile not found. Please start with /start');
+      let tutor;
+    
+      // First try via tutorId stored in session (after sharing contact)
+      if (userSessions[chatId]?.tutorId) {
+        tutor = await Tutor.findById(userSessions[chatId].tutorId);
       }
-
+    
+      // Fallback: try to get contactNumber from session and find by variations
+      if (!tutor && userSessions[chatId]?.contactNumber) {
+        const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
+        tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
+      }
+    
+      if (!tutor) {
+        console.warn(`⚠️ Profile not found for chatId=${chatId}`);
+        return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
+      }
+    
       const profileMsg = formatTutorProfile(tutor);
       return await safeSend(bot, chatId, `${profileMsg}\n\nWhat would you like to edit?`, {
         parse_mode: 'Markdown',
         reply_markup: getMainEditProfileMenu(tutor)
       });
     }
+    
 
     // Personal info menu
     if (data === 'edit_personal_info') {
