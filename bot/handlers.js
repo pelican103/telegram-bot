@@ -1,81 +1,379 @@
-import {
-  normalizePhone,
-  initializeTeachingLevels,
-  initializeAvailability,
-  getTick,
-  paginate,
-  buildFilterQuery
-} from '../utils/helpers.js';
+// handlers.js - Enhanced bot functionality with comprehensive submenus
 
-import {
-  formatTutorProfile,
-  formatAssignment,
-  formatAssignmentsList
-} from '../utils/format.js';
+function normalizePhone(phone) {
+  const cleaned = phone.replace(/\D/g, '');
+  const variations = [
+    cleaned,
+    cleaned.startsWith('65') ? cleaned.substring(2) : '65' + cleaned,
+    cleaned.startsWith('65') ? cleaned : '65' + cleaned
+  ];
+  return [...new Set(variations)];
+}
 
-import {
-  getEditProfileMenu,
-  getPersonalInfoMenu,
-  getTeachingLevelMenu,
-  getAvailabilityMenu,
-  getLocationsMenu,
-  getHourlyRateMenu,
-  getGenderMenu,
-  getRaceMenu,
-  getHighestEducationMenu,
-  getPrimarySubjectsMenu,
-  getSecondarySubjectsMenu,
-  getJCSubjectsMenu,
-  getInternationalSubjectsMenu,
-  getSubjectMenu,
-  getLevelFilterMenu,
-  getScheduleFilterMenu,
-  getStudentCountMenu,
-  getTutorRequirementsMenu,
-  getGenderRequirementsMenu,
-  getRaceRequirementsMenu,
-  getExperienceRequirementsMenu,
-  getQualificationsRequirementsMenu,
-  getAssignmentFilterMenu,
-  getAssignmentsMenu
-} from '../utils/menus.js';
+function initializeTeachingLevels(tutor) {
+  if (!tutor.teachingLevels) {
+    tutor.teachingLevels = {
+      primary: {},
+      secondary: {},
+      jc: {},
+      international: {}
+    };
+  }
+}
+
+function initializeAvailability(tutor) {
+  if (!tutor.availableTimeSlots) {
+    tutor.availableTimeSlots = {
+      weekdayMorning: false,
+      weekdayAfternoon: false,
+      weekdayEvening: false,
+      weekendMorning: false,
+      weekendAfternoon: false,
+      weekendEvening: false
+    };
+  }
+}
+
+function initializeLocations(tutor) {
+  if (!tutor.locations) {
+    tutor.locations = {
+      north: false,
+      south: false,
+      east: false,
+      west: false,
+      central: false,
+      northeast: false,
+      northwest: false
+    };
+  }
+}
+
+function getTick(value) {
+  return value ? '✅' : '❌';
+}
+
+// Format functions
+function formatTutorProfile(tutor) {
+  let profile = `*📋 Your Profile*\n\n`;
+  profile += `*Name:* ${tutor.fullName || 'Not set'}\n`;
+  profile += `*Contact:* ${tutor.contactNumber || 'Not set'}\n`;
+  profile += `*Email:* ${tutor.email || 'Not set'}\n`;
+  profile += `*Gender:* ${tutor.gender || 'Not set'}\n`;
+  profile += `*Race:* ${tutor.race || 'Not set'}\n`;
+  profile += `*Education:* ${tutor.highestEducation || 'Not set'}\n`;
+
+  // Teaching levels summary
+  if (tutor.teachingLevels) {
+    const levels = [];
+    if (Object.values(tutor.teachingLevels.primary || {}).some(v => v)) levels.push('Primary');
+    if (Object.values(tutor.teachingLevels.secondary || {}).some(v => v)) levels.push('Secondary');
+    if (Object.values(tutor.teachingLevels.jc || {}).some(v => v)) levels.push('JC');
+    if (Object.values(tutor.teachingLevels.international || {}).some(v => v)) levels.push('International');
+    profile += `*Teaching Levels:* ${levels.length ? levels.join(', ') : 'Not set'}\n`;
+  }
+
+  // Locations summary
+  if (tutor.locations) {
+    const locations = [];
+    Object.entries(tutor.locations).forEach(([key, value]) => {
+      if (value) locations.push(key.charAt(0).toUpperCase() + key.slice(1));
+    });
+    profile += `*Locations:* ${locations.length ? locations.join(', ') : 'Not set'}\n`;
+  }
+
+  // Availability summary
+  if (tutor.availableTimeSlots) {
+    const slots = [];
+    Object.entries(tutor.availableTimeSlots).forEach(([key, value]) => {
+      if (value) {
+        const formatted = key.replace(/([A-Z])/g, ' $1').toLowerCase();
+        slots.push(formatted.charAt(0).toUpperCase() + formatted.slice(1));
+      }
+    });
+    profile += `*Availability:* ${slots.length ? slots.join(', ') : 'Not set'}\n`;
+  }
+
+  return profile;
+}
+
+function formatAssignment(assignment) {
+  let msg = `*🎯 ${assignment.title || 'Assignment'}*\n\n`;
+  msg += `*Level:* ${assignment.level}\n`;
+  msg += `*Subject:* ${assignment.subject}\n`;
+  msg += `*Location:* ${assignment.location}\n`;
+  msg += `*Rate:* $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
+  msg += `*Students:* ${assignment.studentCount || 1}\n`;
+  msg += `*Frequency:* ${assignment.frequency}/week\n`;
+  msg += `*Duration:* ${assignment.duration}\n`;
+  
+  if (assignment.description) {
+    msg += `\n*Description:* ${assignment.description}\n`;
+  }
+  
+  msg += `\n*Status:* ${assignment.status}`;
+  return msg;
+}
+
+// Menu functions
+function getMainEditProfileMenu(tutor) {
+  return {
+    inline_keyboard: [
+      [{ text: '📝 Personal Info', callback_data: 'edit_personal_info' }],
+      [{ text: '🎓 Teaching Levels', callback_data: 'edit_teaching_levels' }],
+      [{ text: '📍 Locations', callback_data: 'edit_locations' }],
+      [{ text: '⏰ Availability', callback_data: 'edit_availability' }],
+      [{ text: '💰 Hourly Rates', callback_data: 'edit_hourly_rates' }],
+      [{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]
+    ]
+  };
+}
+
+function getPersonalInfoMenu(tutor) {
+  return {
+    inline_keyboard: [
+      [{ text: '👤 Full Name', callback_data: 'edit_fullName' }],
+      [{ text: '📧 Email', callback_data: 'edit_email' }],
+      [{ text: '⚥ Gender', callback_data: 'edit_gender_menu' }],
+      [{ text: '🌍 Race', callback_data: 'edit_race_menu' }],
+      [{ text: '🎓 Education', callback_data: 'edit_education_menu' }],
+      [{ text: '🔙 Back to Profile Edit', callback_data: 'profile_edit' }]
+    ]
+  };
+}
+
+function getTeachingLevelsMenu(tutor) {
+  initializeTeachingLevels(tutor);
+  
+  const primaryCount = Object.values(tutor.teachingLevels.primary || {}).filter(v => v).length;
+  const secondaryCount = Object.values(tutor.teachingLevels.secondary || {}).filter(v => v).length;
+  const jcCount = Object.values(tutor.teachingLevels.jc || {}).filter(v => v).length;
+  const intlCount = Object.values(tutor.teachingLevels.international || {}).filter(v => v).length;
+  
+  return {
+    inline_keyboard: [
+      [{ text: `📚 Primary (${primaryCount} subjects)`, callback_data: 'edit_primary_subjects' }],
+      [{ text: `📖 Secondary (${secondaryCount} subjects)`, callback_data: 'edit_secondary_subjects' }],
+      [{ text: `🎓 JC (${jcCount} subjects)`, callback_data: 'edit_jc_subjects' }],
+      [{ text: `🌍 International (${intlCount} subjects)`, callback_data: 'edit_international_subjects' }],
+      [{ text: '🔙 Back to Profile Edit', callback_data: 'profile_edit' }]
+    ]
+  };
+}
+
+function getLocationsMenu(tutor) {
+  initializeLocations(tutor);
+  
+  const locations = [
+    { key: 'north', label: 'North' },
+    { key: 'south', label: 'South' },
+    { key: 'east', label: 'East' },
+    { key: 'west', label: 'West' },
+    { key: 'central', label: 'Central' },
+    { key: 'northeast', label: 'Northeast' },
+    { key: 'northwest', label: 'Northwest' }
+  ];
+  
+  const keyboard = locations.map(location => [
+    { 
+      text: `${getTick(tutor.locations[location.key])} ${location.label}`, 
+      callback_data: `toggle_location_${location.key}` 
+    }
+  ]);
+  
+  keyboard.push([{ text: '🔙 Back to Profile Edit', callback_data: 'profile_edit' }]);
+  
+  return { inline_keyboard: keyboard };
+}
+
+function getAvailabilityMenu(tutor) {
+  initializeAvailability(tutor);
+  
+  const slots = [
+    { key: 'weekdayMorning', label: 'Weekday Morning' },
+    { key: 'weekdayAfternoon', label: 'Weekday Afternoon' },
+    { key: 'weekdayEvening', label: 'Weekday Evening' },
+    { key: 'weekendMorning', label: 'Weekend Morning' },
+    { key: 'weekendAfternoon', label: 'Weekend Afternoon' },
+    { key: 'weekendEvening', label: 'Weekend Evening' }
+  ];
+  
+  const keyboard = slots.map(slot => [
+    { 
+      text: `${getTick(tutor.availableTimeSlots[slot.key])} ${slot.label}`, 
+      callback_data: `toggle_availability_${slot.key}` 
+    }
+  ]);
+  
+  keyboard.push([{ text: '🔙 Back to Profile Edit', callback_data: 'profile_edit' }]);
+  
+  return { inline_keyboard: keyboard };
+}
+
+function getPrimarySubjectsMenu(tutor) {
+  initializeTeachingLevels(tutor);
+  
+  const subjects = [
+    { key: 'english', label: 'English' },
+    { key: 'math', label: 'Math' },
+    { key: 'science', label: 'Science' },
+    { key: 'chinese', label: 'Chinese' },
+    { key: 'malay', label: 'Malay' },
+    { key: 'tamil', label: 'Tamil' }
+  ];
+  
+  const keyboard = subjects.map(subject => [
+    { 
+      text: `${getTick(tutor.teachingLevels.primary[subject.key])} ${subject.label}`, 
+      callback_data: `toggle_primary_${subject.key}` 
+    }
+  ]);
+  
+  keyboard.push([{ text: '🔙 Back to Teaching Levels', callback_data: 'edit_teaching_levels' }]);
+  
+  return { inline_keyboard: keyboard };
+}
+
+function getSecondarySubjectsMenu(tutor) {
+  initializeTeachingLevels(tutor);
+  
+  const subjects = [
+    { key: 'english', label: 'English' },
+    { key: 'math', label: 'Math' },
+    { key: 'aMath', label: 'A Math' },
+    { key: 'eMath', label: 'E Math' },
+    { key: 'physics', label: 'Physics' },
+    { key: 'chemistry', label: 'Chemistry' },
+    { key: 'biology', label: 'Biology' },
+    { key: 'science', label: 'Science' },
+    { key: 'history', label: 'History' },
+    { key: 'geography', label: 'Geography' },
+    { key: 'literature', label: 'Literature' },
+    { key: 'chinese', label: 'Chinese' },
+    { key: 'malay', label: 'Malay' },
+    { key: 'tamil', label: 'Tamil' }
+  ];
+  
+  const keyboard = subjects.map(subject => [
+    { 
+      text: `${getTick(tutor.teachingLevels.secondary[subject.key])} ${subject.label}`, 
+      callback_data: `toggle_secondary_${subject.key}` 
+    }
+  ]);
+  
+  keyboard.push([{ text: '🔙 Back to Teaching Levels', callback_data: 'edit_teaching_levels' }]);
+  
+  return { inline_keyboard: keyboard };
+}
+
+function getJCSubjectsMenu(tutor) {
+  initializeTeachingLevels(tutor);
+  
+  const subjects = [
+    { key: 'generalPaper', label: 'General Paper' },
+    { key: 'h1Math', label: 'H1 Math' },
+    { key: 'h2Math', label: 'H2 Math' },
+    { key: 'h1Physics', label: 'H1 Physics' },
+    { key: 'h2Physics', label: 'H2 Physics' },
+    { key: 'h1Chemistry', label: 'H1 Chemistry' },
+    { key: 'h2Chemistry', label: 'H2 Chemistry' },
+    { key: 'h1Biology', label: 'H1 Biology' },
+    { key: 'h2Biology', label: 'H2 Biology' },
+    { key: 'h1Economics', label: 'H1 Economics' },
+    { key: 'h2Economics', label: 'H2 Economics' },
+    { key: 'h1History', label: 'H1 History' },
+    { key: 'h2History', label: 'H2 History' }
+  ];
+  
+  const keyboard = subjects.map(subject => [
+    { 
+      text: `${getTick(tutor.teachingLevels.jc[subject.key])} ${subject.label}`, 
+      callback_data: `toggle_jc_${subject.key}` 
+    }
+  ]);
+  
+  keyboard.push([{ text: '🔙 Back to Teaching Levels', callback_data: 'edit_teaching_levels' }]);
+  
+  return { inline_keyboard: keyboard };
+}
+
+function getInternationalSubjectsMenu(tutor) {
+  initializeTeachingLevels(tutor);
+  
+  const subjects = [
+    { key: 'ib', label: 'IB' },
+    { key: 'igcse', label: 'IGCSE' },
+    { key: 'ielts', label: 'IELTS' },
+    { key: 'toefl', label: 'TOEFL' }
+  ];
+  
+  const keyboard = subjects.map(subject => [
+    { 
+      text: `${getTick(tutor.teachingLevels.international[subject.key])} ${subject.label}`, 
+      callback_data: `toggle_international_${subject.key}` 
+    }
+  ]);
+  
+  keyboard.push([{ text: '🔙 Back to Teaching Levels', callback_data: 'edit_teaching_levels' }]);
+  
+  return { inline_keyboard: keyboard };
+}
+
+function getGenderMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'Male', callback_data: 'set_gender_male' }],
+      [{ text: 'Female', callback_data: 'set_gender_female' }],
+      [{ text: '🔙 Back', callback_data: 'edit_personal_info' }]
+    ]
+  };
+}
+
+function getRaceMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'Chinese', callback_data: 'set_race_chinese' }],
+      [{ text: 'Malay', callback_data: 'set_race_malay' }],
+      [{ text: 'Indian', callback_data: 'set_race_indian' }],
+      [{ text: 'Eurasian', callback_data: 'set_race_eurasian' }],
+      [{ text: 'Others', callback_data: 'set_race_others' }],
+      [{ text: '🔙 Back', callback_data: 'edit_personal_info' }]
+    ]
+  };
+}
+
+function getEducationMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'A Levels', callback_data: 'set_education_alevels' }],
+      [{ text: 'Diploma', callback_data: 'set_education_diploma' }],
+      [{ text: 'Degree', callback_data: 'set_education_degree' }],
+      [{ text: 'Masters', callback_data: 'set_education_masters' }],
+      [{ text: 'PhD', callback_data: 'set_education_phd' }],
+      [{ text: 'Others', callback_data: 'set_education_others' }],
+      [{ text: '🔙 Back', callback_data: 'edit_personal_info' }]
+    ]
+  };
+}
+
+function getHourlyRatesMenu(tutor) {
+  return {
+    inline_keyboard: [
+      [{ text: `💰 Primary Rate: $${tutor.hourlyRate?.primary || 'Not set'}`, callback_data: 'edit_rate_primary' }],
+      [{ text: `💰 Secondary Rate: $${tutor.hourlyRate?.secondary || 'Not set'}`, callback_data: 'edit_rate_secondary' }],
+      [{ text: `💰 JC Rate: $${tutor.hourlyRate?.jc || 'Not set'}`, callback_data: 'edit_rate_jc' }],
+      [{ text: `💰 International Rate: $${tutor.hourlyRate?.international || 'Not set'}`, callback_data: 'edit_rate_international' }],
+      [{ text: '🔙 Back to Profile Edit', callback_data: 'profile_edit' }]
+    ]
+  };
+}
 
 const ITEMS_PER_PAGE = 5;
 
-// Safe send function with enhanced logging and error handling
+// Safe send function with enhanced logging
 function safeSend(bot, chatId, text, options = {}) {
   console.log(`📤 Sending to ${chatId}:`, text.substring(0, 80));
   if (options?.reply_markup) {
     console.log(`📦 Reply markup:`, JSON.stringify(options.reply_markup, null, 2));
-  }
-  
-  // Validate inline keyboard structure
-  if (options.reply_markup?.inline_keyboard) {
-    const keyboard = options.reply_markup.inline_keyboard;
-    if (!Array.isArray(keyboard)) {
-      console.error('❌ Invalid keyboard structure: not an array');
-      options.reply_markup.inline_keyboard = [];
-    } else {
-      // Validate each row
-      keyboard.forEach((row, rowIndex) => {
-        if (!Array.isArray(row)) {
-          console.error(`❌ Invalid keyboard row ${rowIndex}: not an array`);
-          keyboard[rowIndex] = [];
-        } else {
-          // Validate each button
-          row.forEach((button, buttonIndex) => {
-            if (!button.text || (!button.callback_data && !button.url)) {
-              console.error(`❌ Invalid button at row ${rowIndex}, col ${buttonIndex}:`, button);
-            }
-            // Ensure callback_data is not too long (max 64 bytes)
-            if (button.callback_data && button.callback_data.length > 64) {
-              console.warn(`⚠️ Callback data too long, truncating: ${button.callback_data}`);
-              button.callback_data = button.callback_data.substring(0, 64);
-            }
-          });
-        }
-      });
-    }
   }
   
   return bot.sendMessage(chatId, text, options)
@@ -85,12 +383,6 @@ function safeSend(bot, chatId, text, options = {}) {
     })
     .catch(err => {
       console.error(`❌ Failed to send message to ${chatId}:`, err.message);
-      
-      // Try sending a simplified version without markup if the original fails
-      if (options.reply_markup && err.message.includes('Bad Request')) {
-        console.log('🔄 Retrying without reply markup...');
-        return bot.sendMessage(chatId, text);
-      }
       throw err;
     });
 }
@@ -102,8 +394,7 @@ function showMainMenu(chatId, bot) {
       inline_keyboard: [
         [{ text: '📋 View Available Assignments', callback_data: 'view_assignments' }],
         [{ text: '📝 My Applications', callback_data: 'view_applications' }],
-        [{ text: '👤 Update Profile', callback_data: 'profile_edit' }],
-        [{ text: '🔍 Filter Assignments', callback_data: 'assignment_filters' }]
+        [{ text: '👤 Update Profile', callback_data: 'profile_edit' }]
       ]
     }
   });
@@ -139,13 +430,10 @@ async function showAssignments(chatId, bot, Assignment, userSessions, page = 1) 
         assignment.applicants?.some(applicant => 
           applicant.tutorId.toString() === userSessions[chatId].tutorId.toString());
       
-      const keyboard = [];
-      if (assignment.status === 'Open' && !hasApplied) {
-        keyboard.push([{ text: '✅ Apply', callback_data: `apply_${assignment._id}` }]);
-      }
-      if (hasApplied) {
-        keyboard.push([{ text: '📋 Already Applied', callback_data: `view_app_${assignment._id}` }]);
-      }
+      const keyboard = [
+        ...(assignment.status === 'Open' && !hasApplied ? [[{ text: '✅ Apply', callback_data: `apply_${assignment._id}` }]] : []),
+        ...(hasApplied ? [[{ text: '📋 Already Applied', callback_data: `view_application_${assignment._id}` }]] : [])
+      ];
       
       await safeSend(bot, chatId, msg, {
         parse_mode: 'Markdown',
@@ -155,20 +443,19 @@ async function showAssignments(chatId, bot, Assignment, userSessions, page = 1) 
     
     const paginationKeyboard = [];
     if (page > 1) {
-      paginationKeyboard.push({ text: '◀️ Previous', callback_data: `assign_page_${page - 1}` });
+      paginationKeyboard.push({ text: '◀️ Previous', callback_data: `assignments_page_${page - 1}` });
     }
     if (page < totalPages) {
-      paginationKeyboard.push({ text: 'Next ▶️', callback_data: `assign_page_${page + 1}` });
+      paginationKeyboard.push({ text: 'Next ▶️', callback_data: `assignments_page_${page + 1}` });
     }
-    
-    const finalKeyboard = [];
-    if (paginationKeyboard.length > 0) {
-      finalKeyboard.push(paginationKeyboard);
-    }
-    finalKeyboard.push([{ text: 'Back to Main Menu', callback_data: 'main_menu' }]);
     
     await safeSend(bot, chatId, `Page ${page} of ${totalPages}`, {
-      reply_markup: { inline_keyboard: finalKeyboard }
+      reply_markup: {
+        inline_keyboard: [
+          paginationKeyboard,
+          [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+        ]
+      }
     });
   } catch (err) {
     console.error('Error showing assignments:', err);
@@ -176,7 +463,7 @@ async function showAssignments(chatId, bot, Assignment, userSessions, page = 1) 
   }
 }
 
-// Applications pagination with enhanced error handling
+// Applications pagination
 async function showApplications(chatId, bot, Assignment, userSessions, page = 1) {
   try {
     if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
@@ -221,33 +508,32 @@ async function showApplications(chatId, bot, Assignment, userSessions, page = 1)
       msg += `\n\n*Your Application Status:* ${application?.status || 'Unknown'}`;
       msg += `\n*Applied on:* ${application?.appliedAt ? application.appliedAt.toLocaleDateString() : 'Unknown'}`;
       
-      const keyboard = [[{ text: 'View Details', callback_data: `view_app_${assignment._id}` }]];
-      if (application?.status === 'Pending') {
-        keyboard.push([{ text: 'Withdraw Application', callback_data: `withdraw_${assignment._id}` }]);
-      }
-      
       await safeSend(bot, chatId, msg, {
         parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: keyboard }
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'View Details', callback_data: `view_application_${assignment._id}` }],
+            ...(application?.status === 'Pending' ? [[{ text: 'Withdraw Application', callback_data: `withdraw_${assignment._id}` }]] : [])
+          ]
+        }
       });
     }
     
     const paginationKeyboard = [];
     if (page > 1) {
-      paginationKeyboard.push({ text: '◀️ Previous', callback_data: `apps_page_${page - 1}` });
+      paginationKeyboard.push({ text: '◀️ Previous', callback_data: `applications_page_${page - 1}` });
     }
     if (page < totalPages) {
-      paginationKeyboard.push({ text: 'Next ▶️', callback_data: `apps_page_${page + 1}` });
+      paginationKeyboard.push({ text: 'Next ▶️', callback_data: `applications_page_${page + 1}` });
     }
-    
-    const finalKeyboard = [];
-    if (paginationKeyboard.length > 0) {
-      finalKeyboard.push(paginationKeyboard);
-    }
-    finalKeyboard.push([{ text: 'Back to Main Menu', callback_data: 'main_menu' }]);
     
     await safeSend(bot, chatId, `Page ${page} of ${totalPages}`, {
-      reply_markup: { inline_keyboard: finalKeyboard }
+      reply_markup: {
+        inline_keyboard: [
+          paginationKeyboard,
+          [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+        ]
+      }
     });
   } catch (err) {
     console.error('Error showing applications:', err);
@@ -255,864 +541,608 @@ async function showApplications(chatId, bot, Assignment, userSessions, page = 1)
   }
 }
 
-// Handle assignment filters with better error handling
-async function handleAssignmentFilters(bot, chatId, data, Tutor) {
-  try {
-    const tutor = await Tutor.findOne({ telegramChatId: chatId });
-    if (!tutor) {
-      return safeSend(bot, chatId, 'Please start the bot first with /start');
-    }
-
-    // Initialize filters if they don't exist
-    if (!tutor.filters) {
-      tutor.filters = {};
-    }
-
-    switch (data) {
-      case 'assignment_filters':
-        return safeSend(bot, chatId, 'Assignment Filters:', getAssignmentFilterMenu());
-
-      case 'filter_subject':
-        const level = tutor.filters?.level || 'primary';
-        const subjectMenu = getSubjectMenu(level);
-        return safeSend(bot, chatId, 'Select a subject:', subjectMenu);
-
-      case 'filter_level':
-        return safeSend(bot, chatId, 'Select education level:', getLevelFilterMenu());
-
-      case 'filter_location':
-        return safeSend(bot, chatId, 'Select preferred location:', getLocationsMenu(tutor));
-
-      case 'filter_schedule':
-        return safeSend(bot, chatId, 'Select preferred schedule:', getScheduleFilterMenu());
-
-      case 'filter_student_count':
-        return safeSend(bot, chatId, 'Select number of students:', getStudentCountMenu());
-
-      case 'filter_requirements':
-        return safeSend(bot, chatId, 'Select tutor requirements:', getTutorRequirementsMenu());
-
-      case 'apply_filters':
-        const assignments = await Assignment.find({
-          status: 'Open',
-          ...buildFilterQuery(tutor.filters)
-        });
-        return safeSend(bot, chatId, formatAssignmentsList(assignments), getAssignmentsMenu());
-
-      case 'clear_all_filters':
-        tutor.filters = {};
-        await tutor.save();
-        return safeSend(bot, chatId, 'All filters cleared', getAssignmentFilterMenu());
-
-      // Handle level selection
-      case 'level_primary':
-      case 'level_secondary':
-      case 'level_jc':
-      case 'level_international':
-        const selectedLevel = data.split('_')[1];
-        tutor.filters = { ...tutor.filters, level: selectedLevel };
-        await tutor.save();
-        return safeSend(bot, chatId, 'Select a subject:', getSubjectMenu(selectedLevel));
-
-      // Handle student count
-      case 'students_1':
-      case 'students_2':
-      case 'students_3_5':
-      case 'students_6_plus':
-        const count = data.replace('students_', '');
-        tutor.filters = { ...tutor.filters, studentCount: count };
-        await tutor.save();
-        return safeSend(bot, chatId, 'Student count updated', getStudentCountMenu());
-
-      // Handle tutor requirements
-      case 'req_gender':
-        return safeSend(bot, chatId, 'Select preferred gender:', getGenderRequirementsMenu());
-      case 'req_race':
-        return safeSend(bot, chatId, 'Select preferred race:', getRaceRequirementsMenu());
-      case 'req_experience':
-        return safeSend(bot, chatId, 'Select experience requirement:', getExperienceRequirementsMenu());
-      case 'req_qualifications':
-        return safeSend(bot, chatId, 'Select qualification requirement:', getQualificationsRequirementsMenu());
-
-      // Handle gender selection
-      case 'req_gender_male':
-      case 'req_gender_female':
-      case 'req_gender_any':
-        const gender = data.split('_')[2];
-        tutor.filters = {
-          ...tutor.filters,
-          tutorRequirements: { ...tutor.filters?.tutorRequirements, gender }
-        };
-        await tutor.save();
-        return safeSend(bot, chatId, 'Gender requirement updated', getGenderRequirementsMenu());
-
-      default:
-        return safeSend(bot, chatId, 'Invalid filter option');
-    }
-  } catch (err) {
-    console.error('Error handling assignment filters:', err);
-    return safeSend(bot, chatId, 'There was an error processing your request. Please try again.');
-  }
-}
-
-// Main handler function with improved error handling
+// Main handler function
 export async function handleUpdate(bot, context, update) {
   const { Tutor, Assignment, userSessions, ADMIN_USERS } = context;
 
-  try {
-    // Handle /start command
-    if (update.message?.text === '/start') {
-      const chatId = update.message.chat.id;
-      console.log(`🚀 Start command received from ${chatId}`);
-      userSessions[chatId] = { state: 'awaiting_contact' };
-      return safeSend(bot, chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
-        reply_markup: {
-          keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-          one_time_keyboard: true,
-          resize_keyboard: true
-        },
+  // Handle /start command
+  if (update.message?.text === '/start') {
+    const chatId = update.message.chat.id;
+    console.log(`🚀 Start command received from ${chatId}`);
+    userSessions[chatId] = { state: 'awaiting_contact' };
+    return safeSend(bot, chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
+      reply_markup: {
+        keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
+        one_time_keyboard: true,
+      },
+    });
+  }
+
+  // Handle contact sharing
+  if (update.message?.contact) {
+    const msg = update.message;
+    const chatId = msg.chat.id;
+    console.log('📞 Contact received from:', msg.from.id);
+    console.log('📞 Contact details:', msg.contact);
+
+    const contactNumber = msg.contact.phone_number;
+    const variations = normalizePhone(contactNumber);
+    console.log('🔎 Phone search variations:', variations);
+
+    try {
+      const tutor = await Tutor.findOne({
+        $or: variations.map(v => ({ contactNumber: { $regex: new RegExp(v, 'i') } }))
       });
-    }
 
-    // Handle contact sharing
-    if (update.message?.contact) {
-      const msg = update.message;
-      const chatId = msg.chat.id;
-      console.log('📞 Contact received from:', msg.from.id);
-      console.log('📞 Contact details:', msg.contact);
-
-      const contactNumber = msg.contact.phone_number;
-      const variations = normalizePhone(contactNumber);
-      console.log('🔎 Phone search variations:', variations);
-
-      try {
-        const tutor = await Tutor.findOne({
-          $or: variations.map(v => ({ contactNumber: { $regex: new RegExp(v, 'i') } }))
-        });
-
-        if (!tutor) {
-          console.log('❌ Tutor not found for variations:', variations);
-          return safeSend(bot, chatId, 'Sorry, we could not find your registration. Would you like to register as a tutor?', {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: 'Register Now', url: 'https://www.lioncitytutors.com/register-tutor' }],
-                [{ text: 'Try Another Number', callback_data: 'start' }]
-              ]
-            }
-          });
-        }
-
-        console.log('✅ Tutor found:', tutor._id);
-        const pendingAssignmentId = userSessions[chatId]?.pendingAssignmentId;
-        userSessions[chatId] = {
-          tutorId: tutor._id,
-          state: 'profile_verification'
-        };
-        
-        if (pendingAssignmentId) {
-          userSessions[chatId].pendingAssignmentId = pendingAssignmentId;
-        }
-
-        const profileMessage = formatTutorProfile(tutor);
-        return safeSend(bot, chatId, profileMessage, {
-          parse_mode: 'Markdown',
+      if (!tutor) {
+        console.log('❌ Tutor not found for variations:', variations);
+        return safeSend(bot, chatId, 'Sorry, we could not find your registration. Would you like to register as a tutor?', {
           reply_markup: {
             inline_keyboard: [
-              [{ text: 'Yes, use this profile', callback_data: 'profile_confirm' }],
-              [{ text: 'No, I would like to edit this profile', callback_data: 'profile_edit' }],
-              [{ text: 'Back', callback_data: 'start' }]
+              [{ text: 'Register Now', url: 'https://www.lioncitytutors.com/register-tutor' }],
+              [{ text: 'Try Another Number', callback_data: 'start' }]
             ]
           }
         });
-      } catch (err) {
-        console.error('Error finding tutor:', err);
-        return safeSend(bot, chatId, 'There was an error processing your request. Please try again later.');
       }
-    }
 
-    // Handle text messages for profile editing
-    if (update.message?.text && userSessions[update.message.chat.id]?.state?.startsWith('awaiting_')) {
-      const chatId = update.message.chat.id;
-      const session = userSessions[chatId];
-      const text = update.message.text;
+      console.log('✅ Tutor found:', tutor._id);
+      const pendingAssignmentId = userSessions[chatId]?.pendingAssignmentId;
+      userSessions[chatId] = {
+        tutorId: tutor._id,
+        state: 'profile_verification'
+      };
+      
+      if (pendingAssignmentId) {
+        userSessions[chatId].pendingAssignmentId = pendingAssignmentId;
+      }
 
-      try {
-        const tutor = await Tutor.findById(session.tutorId);
-        if (!tutor) {
-          return safeSend(bot, chatId, 'Tutor not found. Please try again with /start.');
+      const profileMessage = formatTutorProfile(tutor);
+      return safeSend(bot, chatId, profileMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Yes, use this profile', callback_data: 'profile_confirm' }],
+            [{ text: 'No, I would like to edit this profile', callback_data: 'profile_edit' }],
+            [{ text: 'Back', callback_data: 'start' }]
+          ]
         }
+      });
+    } catch (err) {
+      console.error('Error finding tutor:', err);
+      return safeSend(bot, chatId, 'There was an error processing your request. Please try again later.');
+    }
+  }
 
-        const field = session.state.replace('awaiting_', '');
+  // Handle text messages for profile editing
+  if (update.message?.text && userSessions[update.message.chat.id]?.state?.startsWith('awaiting_')) {
+    const chatId = update.message.chat.id;
+    const session = userSessions[chatId];
+    const text = update.message.text;
+
+    try {
+      const tutor = await Tutor.findById(session.tutorId);
+      if (!tutor) {
+        return safeSend(bot, chatId, 'Tutor not found. Please try again with /start.');
+      }
+
+      const field = session.state.replace('awaiting_', '');
+      
+      // Handle different field types
+      if (field.startsWith('rate_')) {
+        const level = field.replace('rate_', '');
+        if (!tutor.hourlyRate) tutor.hourlyRate = {};
+        tutor.hourlyRate[level] = text;
+        await tutor.save();
         
-        // Update the field
+        session.state = 'main_menu';
+        await safeSend(bot, chatId, `✅ ${level} rate updated to $${text}!`);
+        
+        return safeSend(bot, chatId, 'Select rate to edit:', {
+          reply_markup: getHourlyRatesMenu(tutor)
+        });
+      } else {
+        // Regular field update
         tutor[field] = text;
         await tutor.save();
-
-        // Clear the waiting state
+        
         session.state = 'main_menu';
-
         await safeSend(bot, chatId, `✅ ${field} updated successfully!`);
         
-        // Show updated profile
-        const profileMessage = formatTutorProfile(tutor);
-        return safeSend(bot, chatId, profileMessage, {
-          parse_mode: 'Markdown',
-          reply_markup: getEditProfileMenu(tutor)
+        return safeSend(bot, chatId, 'Select field to edit:', {
+          reply_markup: getPersonalInfoMenu(tutor)
         });
-      } catch (err) {
-        console.error('Error updating profile:', err);
-        return safeSend(bot, chatId, 'There was an error updating your profile. Please try again.');
       }
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      return safeSend(bot, chatId, 'There was an error updating your profile. Please try again.');
     }
+  }
 
-    // Handle callback queries
-    if (update.callback_query) {
-      const query = update.callback_query;
-      const chatId = query.message.chat.id;
-      const data = query.data;
-      const session = userSessions[chatId];
+  // Handle callback queries
+  if (update.callback_query) {
+    const query = update.callback_query;
+    const chatId = query.message.chat.id;
+    const data = query.data;
+    const messageId = query.message.message_id;
+    
+    console.log(`🔄 Callback query received: ${data} from ${chatId}`);
 
-      try {
-        await bot.answerCallbackQuery(query.id);
-        console.log(`🔔 Callback query: ${data} from ${chatId}`);
+    try {
+      await bot.answerCallbackQuery(query.id);
+      
+      // Get tutor if session exists
+      let tutor = null;
+      if (userSessions[chatId]?.tutorId) {
+        tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      }
 
-        // Handle cases where no session exists
-        if (!session) {
-          if (data === 'start') {
-            userSessions[chatId] = { state: 'awaiting_contact' };
-            return safeSend(bot, chatId, 'Please share your phone number to verify your profile.', {
-              reply_markup: {
-                keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-                one_time_keyboard: true,
-                resize_keyboard: true
-              }
-            });
-          }
-          return safeSend(bot, chatId, 'Session expired. Please send /start to begin again.');
+      // Handle main menu navigation
+      if (data === 'main_menu') {
+        return showMainMenu(chatId, bot);
+      }
+
+      // Handle start over
+      if (data === 'start') {
+        delete userSessions[chatId];
+        return safeSend(bot, chatId, 'Welcome to Lion City Tutors! Please share your phone number to verify your profile.', {
+          reply_markup: {
+            keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
+            one_time_keyboard: true,
+          },
+        });
+      }
+
+      // Handle profile confirmation
+      if (data === 'profile_confirm') {
+        if (!userSessions[chatId]?.tutorId) {
+          return safeSend(bot, chatId, 'Session expired. Please start again with /start.');
         }
-
-        // Handle start callback
-        if (data === 'start') {
-          userSessions[chatId] = { state: 'awaiting_contact' };
-          return safeSend(bot, chatId, 'Please share your phone number to verify your profile.', {
-            reply_markup: {
-              keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-              one_time_keyboard: true,
-              resize_keyboard: true
-            }
-          });
-        }
-
-        // For most callbacks, we need a tutor
-        if (!session.tutorId && !['start'].includes(data)) {
-          return safeSend(bot, chatId, 'Session expired. Please send /start to begin again.');
-        }
-
-        const tutor = session.tutorId ? await Tutor.findById(session.tutorId) : null;
-        if (!tutor && !['start'].includes(data)) {
-          return safeSend(bot, chatId, 'Tutor not found. Please try again with /start.');
-        }
-
-        // Profile confirmation
-        if (data === 'profile_confirm') {
-          session.state = 'main_menu';
-          return showMainMenu(chatId, bot);
-        }
-
-        // Profile editing
-        if (data === 'profile_edit') {
-          return safeSend(bot, chatId, 'What would you like to edit?', {
-            reply_markup: getEditProfileMenu(tutor)
-          });
-        }
-
-        // Main menu
-        if (data === 'main_menu') {
-          return showMainMenu(chatId, bot);
-        }
-
-        // View assignments
-        if (data === 'view_assignments') {
-          return showAssignments(chatId, bot, Assignment, userSessions, 1);
-        }
-
-        // Assignment pagination - Fixed callback names
-        if (data.startsWith('assign_page_')) {
-          const page = parseInt(data.split('_')[2]);
-          return showAssignments(chatId, bot, Assignment, userSessions, page);
-        }
-
-        // View applications
-        if (data === 'view_applications') {
-          return showApplications(chatId, bot, Assignment, userSessions, 1);
-        }
-
-        // Application pagination - Fixed callback names
-        if (data.startsWith('apps_page_')) {
-          const page = parseInt(data.split('_')[2]);
-          return showApplications(chatId, bot, Assignment, userSessions, page);
-        }
-
-        // Apply to assignment
-        if (data.startsWith('apply_')) {
-          const assignmentId = data.replace('apply_', '');
+        
+        userSessions[chatId].state = 'main_menu';
+        
+        // Check if there's a pending assignment application
+        if (userSessions[chatId].pendingAssignmentId) {
+          const assignmentId = userSessions[chatId].pendingAssignmentId;
+          delete userSessions[chatId].pendingAssignmentId;
+          
           try {
             const assignment = await Assignment.findById(assignmentId);
             if (!assignment) {
-              return safeSend(bot, chatId, 'Assignment not found.');
+              return safeSend(bot, chatId, 'Assignment not found. Returning to main menu.', {
+                reply_markup: { inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]] }
+              });
             }
-
+            
             // Check if already applied
-            const hasApplied = assignment.applicants?.some(app => 
-              app.tutorId.toString() === session.tutorId.toString());
+            const hasApplied = assignment.applicants?.some(applicant => 
+              applicant.tutorId.toString() === userSessions[chatId].tutorId.toString());
             
             if (hasApplied) {
-              return safeSend(bot, chatId, 'You have already applied to this assignment.');
+              return safeSend(bot, chatId, 'You have already applied to this assignment.', {
+                reply_markup: { inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]] }
+              });
             }
-
+            
             // Add application
             if (!assignment.applicants) assignment.applicants = [];
             assignment.applicants.push({
-              tutorId: session.tutorId,
+              tutorId: userSessions[chatId].tutorId,
               status: 'Pending',
               appliedAt: new Date()
             });
-
+            
             await assignment.save();
+            
             return safeSend(bot, chatId, '✅ Application submitted successfully!', {
               reply_markup: {
                 inline_keyboard: [
                   [{ text: 'View My Applications', callback_data: 'view_applications' }],
-                  [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
+                  [{ text: 'Main Menu', callback_data: 'main_menu' }]
                 ]
               }
             });
           } catch (err) {
-            console.error('Error applying to assignment:', err);
-            return safeSend(bot, chatId, 'There was an error submitting your application. Please try again.');
+            console.error('Error processing pending application:', err);
+            return safeSend(bot, chatId, 'There was an error processing your application. Please try again.');
           }
         }
+        
+        return showMainMenu(chatId, bot);
+      }
 
-        // Handle profile field edits
-        if (data.startsWith('edit_')) {
-          const field = data.replace('edit_', '');
-          session.state = `awaiting_${field}`;
-          return safeSend(bot, chatId, `Please enter your new ${field}:`);
-        }
+      // Handle assignments view
+      if (data === 'view_assignments') {
+        return showAssignments(chatId, bot, Assignment, userSessions);
+      }
 
-        // Handle menu selections
-        if (data === 'edit_teachingLevels') {
-          return safeSend(bot, chatId, 'Select your teaching levels:', {
-            reply_markup: getTeachingLevelMenu(tutor)
+      // Handle assignment pagination
+      if (data.startsWith('assignments_page_')) {
+        const page = parseInt(data.split('_')[2]);
+        return showAssignments(chatId, bot, Assignment, userSessions, page);
+      }
+
+      // Handle applications view
+      if (data === 'view_applications') {
+        return showApplications(chatId, bot, Assignment, userSessions);
+      }
+
+      // Handle applications pagination
+      if (data.startsWith('applications_page_')) {
+        const page = parseInt(data.split('_')[2]);
+        return showApplications(chatId, bot, Assignment, userSessions, page);
+      }
+
+      // Handle assignment application
+      if (data.startsWith('apply_')) {
+        const assignmentId = data.replace('apply_', '');
+        
+        if (!userSessions[chatId]?.tutorId) {
+          userSessions[chatId] = { pendingAssignmentId: assignmentId, state: 'awaiting_contact' };
+          return safeSend(bot, chatId, 'Please share your phone number first to verify your profile.', {
+            reply_markup: {
+              keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
+              one_time_keyboard: true,
+            },
           });
         }
 
-        if (data === 'edit_availability') {
-          const menuData = getAvailabilityMenu(tutor);
-          return safeSend(bot, chatId, menuData.text || 'Select your availability:', {
-            parse_mode: menuData.options?.parse_mode || 'HTML',
-            reply_markup: menuData.options?.reply_markup || menuData
-          });
-        }
-
-        // Handle toggle operations for teaching levels
-        if (data.startsWith('toggle_')) {
-          const parts = data.split('_');
+        try {
+          const assignment = await Assignment.findById(assignmentId);
+          if (!assignment) {
+            return safeSend(bot, chatId, 'Assignment not found.');
+          }
           
-          if (parts.length === 2) {
-            // Handle level toggles (primary, secondary, jc, international)
-            const level = parts[1];
-            if (['primary', 'secondary', 'jc', 'international'].includes(level)) {
-              initializeTeachingLevels(tutor);
-              if (!tutor.teachingLevels[level]) {
-                tutor.teachingLevels[level] = {};
-              }
-              await tutor.save();
-              
-              // Show the appropriate subject menu
-              let menu;
-              switch(level) {
-                case 'primary':
-                  menu = getPrimarySubjectsMenu(tutor);
-                  break;
-                case 'secondary':
-                  menu = getSecondarySubjectsMenu(tutor);
-                  break;
-                case 'jc':
-                  menu = getJCSubjectsMenu(tutor);
-                  break;
-                case 'international':
-                  menu = getInternationalSubjectsMenu(tutor);
-                  break;
-              }
-              
-              return safeSend(bot, chatId, `Select ${level} subjects:`, {
-                reply_markup: menu
-              });
+          // Check if already applied
+          const hasApplied = assignment.applicants?.some(applicant => 
+            applicant.tutorId.toString() === userSessions[chatId].tutorId.toString());
+          
+          if (hasApplied) {
+            return safeSend(bot, chatId, 'You have already applied to this assignment.');
+          }
+          
+          // Add application
+          if (!assignment.applicants) assignment.applicants = [];
+          assignment.applicants.push({
+            tutorId: userSessions[chatId].tutorId,
+            status: 'Pending',
+            appliedAt: new Date()
+          });
+          
+          await assignment.save();
+          
+          return safeSend(bot, chatId, '✅ Application submitted successfully!', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: 'View My Applications', callback_data: 'view_applications' }],
+                [{ text: 'Back to Assignments', callback_data: 'view_assignments' }],
+                [{ text: 'Main Menu', callback_data: 'main_menu' }]
+              ]
             }
-          } else if (parts.length === 3) {
-            // Handle subject toggles (e.g., toggle_primary_english)
-            const [_, level, subject] = parts;
-            if (['primary', 'secondary', 'jc', 'international'].includes(level)) {
-              initializeTeachingLevels(tutor);
-              if (!tutor.teachingLevels[level]) {
-                tutor.teachingLevels[level] = {};
-              }
-              tutor.teachingLevels[level][subject] = !tutor.teachingLevels[level][subject];
-              await tutor.save();
-              
-              // Show the appropriate subject menu
-              let menu;
-              switch(level) {
-                case 'primary':
-                  menu = getPrimarySubjectsMenu(tutor);
-                  break;
-                case 'secondary':
-                  menu = getSecondarySubjectsMenu(tutor);
-                  break;
-                case 'jc':
-                  menu = getJCSubjectsMenu(tutor);
-                  break;
-                case 'international':
-                  menu = getInternationalSubjectsMenu(tutor);
-                  break;
-              }
-              
-              return safeSend(bot, chatId, `${subject} ${tutor.teachingLevels[level][subject] ? 'added' : 'removed'}!`, {
-                reply_markup: menu
-              });
+          });
+        } catch (err) {
+          console.error('Error applying to assignment:', err);
+          return safeSend(bot, chatId, 'There was an error submitting your application. Please try again.');
+        }
+      }
+
+      // Handle application withdrawal
+      if (data.startsWith('withdraw_')) {
+        const assignmentId = data.replace('withdraw_', '');
+        
+        try {
+          const assignment = await Assignment.findById(assignmentId);
+          if (!assignment) {
+            return safeSend(bot, chatId, 'Assignment not found.');
+          }
+          
+          assignment.applicants = assignment.applicants.filter(
+            applicant => applicant.tutorId.toString() !== userSessions[chatId].tutorId.toString()
+          );
+          
+          await assignment.save();
+          
+          return safeSend(bot, chatId, '✅ Application withdrawn successfully!', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: 'View My Applications', callback_data: 'view_applications' }],
+                [{ text: 'Main Menu', callback_data: 'main_menu' }]
+              ]
             }
+          });
+        } catch (err) {
+          console.error('Error withdrawing application:', err);
+          return safeSend(bot, chatId, 'There was an error withdrawing your application. Please try again.');
+        }
+      }
+
+      // Handle application details view
+      if (data.startsWith('view_application_')) {
+        const assignmentId = data.replace('view_application_', '');
+        
+        try {
+          const assignment = await Assignment.findById(assignmentId);
+          if (!assignment) {
+            return safeSend(bot, chatId, 'Assignment not found.');
           }
           
-          // Handle availability toggles
-          if (['weekdayMorning', 'weekdayAfternoon', 'weekdayEvening', 
-               'weekendMorning', 'weekendAfternoon', 'weekendEvening'].includes(parts[1])) {
-            initializeAvailability(tutor);
-            const slot = parts[1];
-            tutor.availableTimeSlots[slot] = !tutor.availableTimeSlots[slot];
-            await tutor.save();
-            
-            const menuData = getAvailabilityMenu(tutor);
-            return safeSend(bot, chatId, 'Availability updated!', {
-              parse_mode: menuData.options?.parse_mode || 'HTML',
-              reply_markup: menuData.options?.reply_markup || menuData
-            });
+          const application = assignment.applicants.find(
+            app => app.tutorId.toString() === userSessions[chatId].tutorId.toString()
+          );
+          
+          let msg = formatAssignment(assignment);
+          msg += `\n\n*Your Application Status:* ${application?.status || 'Unknown'}`;
+          msg += `\n*Applied on:* ${application?.appliedAt ? application.appliedAt.toLocaleDateString() : 'Unknown'}`;
+          
+          const keyboard = [
+            [{ text: 'Back to My Applications', callback_data: 'view_applications' }]
+          ];
+          
+          if (application?.status === 'Pending') {
+            keyboard.unshift([{ text: 'Withdraw Application', callback_data: `withdraw_${assignmentId}` }]);
           }
           
-          // Handle location toggles
-          if (parts[1] === 'location') {
-            const location = parts[2];
-            if (!tutor.locations) {
-              tutor.locations = {};
-            }
-            tutor.locations[location] = !tutor.locations[location];
-            await tutor.save();
-            
-            return safeSend(bot, chatId, 'Location updated!', {
-              reply_markup: getLocationsMenu(tutor)
-            });
-          }
-        }
-
-        // Handle menu callbacks for dropdowns
-        if (data === 'set_gender_menu') {
-          return safeSend(bot, chatId, 'Select your gender:', {
-            reply_markup: getGenderMenu()
-          });
-        }
-
-        if (data === 'set_race_menu') {
-          return safeSend(bot, chatId, 'Select your race:', {
-            reply_markup: getRaceMenu()
-          });
-        }
-
-        if (data === 'set_education_menu') {
-          return safeSend(bot, chatId, 'Select your highest education:', {
-            reply_markup: getHighestEducationMenu()
-          });
-        }
-
-        // Handle set operations
-        if (data.startsWith('set_gender_')) {
-          const gender = data.replace('set_gender_', '');
-          tutor.gender = gender.charAt(0).toUpperCase() + gender.slice(1);
-          await tutor.save();
-          
-          return safeSend(bot, chatId, '✅ Gender updated successfully!', {
-            reply_markup: getEditProfileMenu(tutor)
-          });
-        }
-
-        if (data.startsWith('set_race_')) {
-          const race = data.replace('set_race_', '');
-          tutor.race = race.charAt(0).toUpperCase() + race.slice(1);
-          await tutor.save();
-          
-          return safeSend(bot, chatId, '✅ Race updated successfully!', {
-            reply_markup: getEditProfileMenu(tutor)
-          });
-        }
-
-        if (data.startsWith('set_education_')) {
-          const education = data.replace('set_education_', '');
-          tutor.highestEducation = education;
-          await tutor.save();
-          
-          return safeSend(bot, chatId, '✅ Education updated successfully!', {
-            reply_markup: getEditProfileMenu(tutor)
-          });
-        }
-
-        // Handle hourly rate setting
-        if (data === 'edit_hourlyRate') {
-          return safeSend(bot, chatId, 'Select your hourly rate:', {
-            reply_markup: getHourlyRateMenu()
-          });
-        }
-
-        if (data.startsWith('set_rate_')) {
-          const rate = data.replace('set_rate_', '');
-          tutor.hourlyRate = parseInt(rate);
-          await tutor.save();
-          
-          return safeSend(bot, chatId, `✅ Hourly rate set to $${rate}!`, {
-            reply_markup: getEditProfileMenu(tutor)
-          });
-        }
-
-        // Handle location editing
-        if (data === 'edit_locations') {
-          return safeSend(bot, chatId, 'Select your preferred locations:', {
-            reply_markup: getLocationsMenu(tutor)
-          });
-        }
-
-        // Handle back to profile from submenus
-        if (data === 'back_to_profile') {
-          const profileMessage = formatTutorProfile(tutor);
-          return safeSend(bot, chatId, profileMessage, {
+          return safeSend(bot, chatId, msg, {
             parse_mode: 'Markdown',
-            reply_markup: getEditProfileMenu(tutor)
+            reply_markup: { inline_keyboard: keyboard }
           });
+        } catch (err) {
+          console.error('Error viewing application:', err);
+          return safeSend(bot, chatId, 'There was an error retrieving application details. Please try again.');
         }
+      }
 
-        // Handle assignment filters
-        if (data.startsWith('assignment_filters') || data.startsWith('filter_') || 
-            data.startsWith('level_') || data.startsWith('students_') || 
-            data.startsWith('req_') || data === 'apply_filters' || 
-            data === 'clear_all_filters') {
-          return handleAssignmentFilters(bot, chatId, data, Tutor);
+      // Profile editing handlers
+      if (data === 'profile_edit') {
+        if (!tutor) {
+          return safeSend(bot, chatId, 'Tutor profile not found. Please start again with /start.');
         }
-
-        // Handle subject filter selections based on level
-        if (data.startsWith('subject_')) {
-          const subject = data.replace('subject_', '');
-          const filters = tutor.filters || {};
-          filters.subject = subject;
-          tutor.filters = filters;
-          await tutor.save();
-          
-          return safeSend(bot, chatId, `Subject filter set to: ${subject}`, getAssignmentFilterMenu());
-        }
-
-        // Handle location filter selections
-        if (data.startsWith('location_')) {
-          const location = data.replace('location_', '');
-          const filters = tutor.filters || {};
-          filters.location = location;
-          tutor.filters = filters;
-          await tutor.save();
-          
-          return safeSend(bot, chatId, `Location filter set to: ${location}`, getAssignmentFilterMenu());
-        }
-
-        // Handle schedule filter selections
-        if (data.startsWith('schedule_')) {
-          const schedule = data.replace('schedule_', '');
-          const filters = tutor.filters || {};
-          filters.schedule = schedule;
-          tutor.filters = filters;
-          await tutor.save();
-          
-          return safeSend(bot, chatId, `Schedule filter set to: ${schedule}`, getScheduleFilterMenu());
-        }
-
-        // Handle experience requirements
-        if (data.startsWith('exp_')) {
-          const experience = data.replace('exp_', '');
-          const filters = tutor.filters || {};
-          if (!filters.tutorRequirements) filters.tutorRequirements = {};
-          filters.tutorRequirements.experience = experience;
-          tutor.filters = filters;
-          await tutor.save();
-          
-          return safeSend(bot, chatId, `Experience requirement set to: ${experience}`, getExperienceRequirementsMenu());
-        }
-
-        // Handle qualification requirements
-        if (data.startsWith('qual_')) {
-          const qualification = data.replace('qual_', '');
-          const filters = tutor.filters || {};
-          if (!filters.tutorRequirements) filters.tutorRequirements = {};
-          filters.tutorRequirements.qualifications = qualification;
-          tutor.filters = filters;
-          await tutor.save();
-          
-          return safeSend(bot, chatId, `Qualification requirement set to: ${qualification}`, getQualificationsRequirementsMenu());
-        }
-
-        // Handle race requirements
-        if (data.startsWith('req_race_')) {
-          const race = data.replace('req_race_', '');
-          const filters = tutor.filters || {};
-          if (!filters.tutorRequirements) filters.tutorRequirements = {};
-          filters.tutorRequirements.race = race;
-          tutor.filters = filters;
-          await tutor.save();
-          
-          return safeSend(bot, chatId, `Race requirement set to: ${race}`, getRaceRequirementsMenu());
-        }
-
-        // Handle withdraw application
-        if (data.startsWith('withdraw_')) {
-          const assignmentId = data.replace('withdraw_', '');
-          try {
-            const assignment = await Assignment.findById(assignmentId);
-            if (!assignment) {
-              return safeSend(bot, chatId, 'Assignment not found.');
-            }
-
-            // Remove the application
-            assignment.applicants = assignment.applicants.filter(
-              app => app.tutorId.toString() !== session.tutorId.toString()
-            );
-
-            await assignment.save();
-            return safeSend(bot, chatId, '✅ Application withdrawn successfully!', {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: 'View My Applications', callback_data: 'view_applications' }],
-                  [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
-                ]
-              }
-            });
-          } catch (err) {
-            console.error('Error withdrawing application:', err);
-            return safeSend(bot, chatId, 'There was an error withdrawing your application. Please try again.');
-          }
-        }
-
-        // Handle view application details
-        if (data.startsWith('view_app_')) {
-          const assignmentId = data.replace('view_app_', '');
-          try {
-            const assignment = await Assignment.findById(assignmentId);
-            if (!assignment) {
-              return safeSend(bot, chatId, 'Assignment not found.');
-            }
-
-            const application = assignment.applicants.find(
-              app => app.tutorId.toString() === session.tutorId.toString()
-            );
-
-            if (!application) {
-              return safeSend(bot, chatId, 'Application not found.');
-            }
-
-            let msg = formatAssignment(assignment);
-            msg += `\n\n📋 *Your Application Details:*`;
-            msg += `\n• Status: ${application.status}`;
-            msg += `\n• Applied on: ${application.appliedAt.toLocaleDateString()}`;
-            
-            if (application.notes) {
-              msg += `\n• Notes: ${application.notes}`;
-            }
-
-            const keyboard = [];
-            if (application.status === 'Pending') {
-              keyboard.push([{ text: 'Withdraw Application', callback_data: `withdraw_${assignmentId}` }]);
-            }
-            keyboard.push([{ text: 'Back to Applications', callback_data: 'view_applications' }]);
-            keyboard.push([{ text: 'Back to Main Menu', callback_data: 'main_menu' }]);
-
-            return safeSend(bot, chatId, msg, {
-              parse_mode: 'Markdown',
-              reply_markup: { inline_keyboard: keyboard }
-            });
-          } catch (err) {
-            console.error('Error viewing application:', err);
-            return safeSend(bot, chatId, 'There was an error retrieving application details. Please try again.');
-          }
-        }
-
-        // Handle admin functions if user is admin
-        if (ADMIN_USERS && ADMIN_USERS.includes(chatId.toString())) {
-          if (data === 'admin_panel') {
-            return safeSend(bot, chatId, 'Admin Panel:', {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: '📊 View Statistics', callback_data: 'admin_stats' }],
-                  [{ text: '👥 Manage Tutors', callback_data: 'admin_tutors' }],
-                  [{ text: '📋 Manage Assignments', callback_data: 'admin_assignments' }],
-                  [{ text: '📢 Send Broadcast', callback_data: 'admin_broadcast' }],
-                  [{ text: 'Back to Main Menu', callback_data: 'main_menu' }]
-                ]
-              }
-            });
-          }
-
-          if (data === 'admin_stats') {
-            try {
-              const totalTutors = await Tutor.countDocuments();
-              const totalAssignments = await Assignment.countDocuments();
-              const openAssignments = await Assignment.countDocuments({ status: 'Open' });
-              const completedAssignments = await Assignment.countDocuments({ status: 'Completed' });
-
-              const stats = `📊 *Platform Statistics*\n\n` +
-                          `👥 Total Tutors: ${totalTutors}\n` +
-                          `📋 Total Assignments: ${totalAssignments}\n` +
-                          `🟢 Open Assignments: ${openAssignments}\n` +
-                          `✅ Completed Assignments: ${completedAssignments}`;
-
-              return safeSend(bot, chatId, stats, {
-                parse_mode: 'Markdown',
-                reply_markup: {
-                  inline_keyboard: [[{ text: 'Back to Admin Panel', callback_data: 'admin_panel' }]]
-                }
-              });
-            } catch (err) {
-              console.error('Error getting admin stats:', err);
-              return safeSend(bot, chatId, 'Error retrieving statistics.');
-            }
-          }
-        }
-
-        // Default fallback
-        console.log(`⚠️ Unhandled callback data: ${data}`);
-        return safeSend(bot, chatId, 'Sorry, I didn\'t understand that action. Please try again.', {
-          reply_markup: {
-            inline_keyboard: [[{ text: 'Back to Main Menu', callback_data: 'main_menu' }]]
-          }
+        
+        const profileMessage = formatTutorProfile(tutor);
+        return safeSend(bot, chatId, profileMessage + '\n\nWhat would you like to edit?', {
+          parse_mode: 'Markdown',
+          reply_markup: getMainEditProfileMenu(tutor)
         });
-
-      } catch (err) {
-        console.error('Error handling callback query:', err);
-        return safeSend(bot, chatId, 'There was an error processing your request. Please try again.');
-      }
-    }
-
-    // Handle other message types
-    if (update.message && !update.message.contact && update.message.text !== '/start') {
-      const chatId = update.message.chat.id;
-      const session = userSessions[chatId];
-      
-      if (!session) {
-        return safeSend(bot, chatId, 'Please start the bot with /start command first.');
       }
 
-      // Handle text input during profile editing states
-      if (session.state && session.state.startsWith('awaiting_')) {
-        // This is already handled above in the text message section
-        return;
+      // Personal info editing
+      if (data === 'edit_personal_info') {
+        return safeSend(bot, chatId, 'Select field to edit:', {
+          reply_markup: getPersonalInfoMenu(tutor)
+        });
       }
 
-      // Handle general messages when not in a specific state
-      return safeSend(bot, chatId, 'I didn\'t understand that. Please use the menu options.', {
+      // Individual field editing
+      if (data.startsWith('edit_') && ['fullName', 'email'].includes(data.replace('edit_', ''))) {
+        const field = data.replace('edit_', '');
+        userSessions[chatId].state = `awaiting_${field}`;
+        return safeSend(bot, chatId, `Please enter your ${field}:`);
+      }
+
+      // Menu handlers for dropdowns
+      if (data === 'edit_gender_menu') {
+        return safeSend(bot, chatId, 'Select your gender:', {
+          reply_markup: getGenderMenu()
+        });
+      }
+
+      if (data === 'edit_race_menu') {
+        return safeSend(bot, chatId, 'Select your race:', {
+          reply_markup: getRaceMenu()
+        });
+      }
+
+      if (data === 'edit_education_menu') {
+        return safeSend(bot, chatId, 'Select your highest education:', {
+          reply_markup: getEducationMenu()
+        });
+      }
+
+      // Set values for dropdown selections
+      if (data.startsWith('set_gender_')) {
+        const value = data.replace('set_gender_', '');
+        tutor.gender = value.charAt(0).toUpperCase() + value.slice(1);
+        await tutor.save();
+        
+        await safeSend(bot, chatId, `✅ Gender updated to ${tutor.gender}!`);
+        return safeSend(bot, chatId, 'Select field to edit:', {
+          reply_markup: getPersonalInfoMenu(tutor)
+        });
+      }
+
+      if (data.startsWith('set_race_')) {
+        const value = data.replace('set_race_', '');
+        tutor.race = value.charAt(0).toUpperCase() + value.slice(1);
+        await tutor.save();
+        
+        await safeSend(bot, chatId, `✅ Race updated to ${tutor.race}!`);
+        return safeSend(bot, chatId, 'Select field to edit:', {
+          reply_markup: getPersonalInfoMenu(tutor)
+        });
+      }
+
+      if (data.startsWith('set_education_')) {
+        const value = data.replace('set_education_', '');
+        const educationMap = {
+          'alevels': 'A Levels',
+          'diploma': 'Diploma',
+          'degree': 'Degree',
+          'masters': 'Masters',
+          'phd': 'PhD',
+          'others': 'Others'
+        };
+        tutor.highestEducation = educationMap[value] || value;
+        await tutor.save();
+        
+        await safeSend(bot, chatId, `✅ Education updated to ${tutor.highestEducation}!`);
+        return safeSend(bot, chatId, 'Select field to edit:', {
+          reply_markup: getPersonalInfoMenu(tutor)
+        });
+      }
+
+      // Teaching levels
+      if (data === 'edit_teaching_levels') {
+        return safeSend(bot, chatId, 'Select teaching level to edit:', {
+          reply_markup: getTeachingLevelsMenu(tutor)
+        });
+      }
+
+      // Subject menus
+      if (data === 'edit_primary_subjects') {
+        return safeSend(bot, chatId, 'Select Primary subjects you can teach:', {
+          reply_markup: getPrimarySubjectsMenu(tutor)
+        });
+      }
+
+      if (data === 'edit_secondary_subjects') {
+        return safeSend(bot, chatId, 'Select Secondary subjects you can teach:', {
+          reply_markup: getSecondarySubjectsMenu(tutor)
+        });
+      }
+
+      if (data === 'edit_jc_subjects') {
+        return safeSend(bot, chatId, 'Select JC subjects you can teach:', {
+          reply_markup: getJCSubjectsMenu(tutor)
+        });
+      }
+
+      if (data === 'edit_international_subjects') {
+        return safeSend(bot, chatId, 'Select International subjects you can teach:', {
+          reply_markup: getInternationalSubjectsMenu(tutor)
+        });
+      }
+
+      // Toggle subjects
+      if (data.startsWith('toggle_primary_')) {
+        const subject = data.replace('toggle_primary_', '');
+        initializeTeachingLevels(tutor);
+        tutor.teachingLevels.primary[subject] = !tutor.teachingLevels.primary[subject];
+        await tutor.save();
+        
+        return safeSend(bot, chatId, 'Select Primary subjects you can teach:', {
+          reply_markup: getPrimarySubjectsMenu(tutor)
+        });
+      }
+
+      if (data.startsWith('toggle_secondary_')) {
+        const subject = data.replace('toggle_secondary_', '');
+        initializeTeachingLevels(tutor);
+        tutor.teachingLevels.secondary[subject] = !tutor.teachingLevels.secondary[subject];
+        await tutor.save();
+        
+        return safeSend(bot, chatId, 'Select Secondary subjects you can teach:', {
+          reply_markup: getSecondarySubjectsMenu(tutor)
+        });
+      }
+
+      if (data.startsWith('toggle_jc_')) {
+        const subject = data.replace('toggle_jc_', '');
+        initializeTeachingLevels(tutor);
+        tutor.teachingLevels.jc[subject] = !tutor.teachingLevels.jc[subject];
+        await tutor.save();
+        
+        return safeSend(bot, chatId, 'Select JC subjects you can teach:', {
+          reply_markup: getJCSubjectsMenu(tutor)
+        });
+      }
+
+      if (data.startsWith('toggle_international_')) {
+        const subject = data.replace('toggle_international_', '');
+        initializeTeachingLevels(tutor);
+        tutor.teachingLevels.international[subject] = !tutor.teachingLevels.international[subject];
+        await tutor.save();
+        
+        return safeSend(bot, chatId, 'Select International subjects you can teach:', {
+          reply_markup: getInternationalSubjectsMenu(tutor)
+        });
+      }
+
+      // Locations
+      if (data === 'edit_locations') {
+        return safeSend(bot, chatId, 'Select locations where you can teach:', {
+          reply_markup: getLocationsMenu(tutor)
+        });
+      }
+
+      if (data.startsWith('toggle_location_')) {
+        const location = data.replace('toggle_location_', '');
+        initializeLocations(tutor);
+        tutor.locations[location] = !tutor.locations[location];
+        await tutor.save();
+        
+        return safeSend(bot, chatId, 'Select locations where you can teach:', {
+          reply_markup: getLocationsMenu(tutor)
+        });
+      }
+
+      // Availability
+      if (data === 'edit_availability') {
+        return safeSend(bot, chatId, 'Select your available time slots:', {
+          reply_markup: getAvailabilityMenu(tutor)
+        });
+      }
+
+      if (data.startsWith('toggle_availability_')) {
+        const slot = data.replace('toggle_availability_', '');
+        initializeAvailability(tutor);
+        tutor.availableTimeSlots[slot] = !tutor.availableTimeSlots[slot];
+        await tutor.save();
+        
+        return safeSend(bot, chatId, 'Select your available time slots:', {
+          reply_markup: getAvailabilityMenu(tutor)
+        });
+      }
+
+      // Hourly rates
+      if (data === 'edit_hourly_rates') {
+        if (!tutor.hourlyRate) tutor.hourlyRate = {};
+        return safeSend(bot, chatId, 'Select rate to edit:', {
+          reply_markup: getHourlyRatesMenu(tutor)
+        });
+      }
+
+      if (data.startsWith('edit_rate_')) {
+        const level = data.replace('edit_rate_', '');
+        userSessions[chatId].state = `awaiting_rate_${level}`;
+        return safeSend(bot, chatId, `Please enter your hourly rate for ${level} level (numbers only):`);
+      }
+
+      // If no handler matched, log and provide fallback
+      console.log(`⚠️ Unhandled callback query: ${data}`);
+      return safeSend(bot, chatId, 'Sorry, I didn\'t understand that action. Please try again.', {
+        reply_markup: {
+          inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]]
+        }
+      });
+
+    } catch (err) {
+      console.error('Error handling callback query:', err);
+      return safeSend(bot, chatId, 'There was an error processing your request. Please try again later.', {
         reply_markup: {
           inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]]
         }
       });
     }
+  }
 
-  } catch (err) {
-    console.error('❌ Error in handleUpdate:', err);
+  // Handle unrecognized messages
+  if (update.message && !update.message.contact && update.message.text !== '/start') {
+    const chatId = update.message.chat.id;
     
-    // Try to send an error message to the user if we have a chat ID
-    const chatId = update.message?.chat?.id || update.callback_query?.message?.chat?.id;
-    if (chatId) {
-      try {
-        await safeSend(bot, chatId, 'Sorry, there was an unexpected error. Please try again or contact support.');
-      } catch (sendErr) {
-        console.error('❌ Failed to send error message:', sendErr);
-      }
+    // If user has an active session, provide context-appropriate help
+    if (userSessions[chatId]?.state === 'main_menu') {
+      return safeSend(bot, chatId, 'I didn\'t understand that. Please use the menu buttons below.', {
+        reply_markup: {
+          inline_keyboard: [[{ text: 'Main Menu', callback_data: 'main_menu' }]]
+        }
+      });
+    } else {
+      return safeSend(bot, chatId, 'Please start by sharing your phone number or use /start to begin.', {
+        reply_markup: {
+          keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
+          one_time_keyboard: true,
+        },
+      });
     }
   }
-}
-
-// Helper function for deep linking to assignments
-export function generateAssignmentDeepLink(assignmentId, botUsername) {
-  return `https://t.me/${botUsername}?start=assignment_${assignmentId}`;
-}
-
-// Function to handle deep link starts (when user clicks on assignment link)
-export async function handleDeepLinkStart(bot, chatId, parameter, context) {
-  const { userSessions } = context;
-  
-  if (parameter.startsWith('assignment_')) {
-    const assignmentId = parameter.replace('assignment_', '');
-    
-    // Store the assignment ID for after profile verification
-    if (!userSessions[chatId]) {
-      userSessions[chatId] = {};
-    }
-    userSessions[chatId].pendingAssignmentId = assignmentId;
-    
-    // Start the normal verification process
-    userSessions[chatId].state = 'awaiting_contact';
-    return safeSend(bot, chatId, 'Welcome! Please share your phone number to verify your profile and view the assignment.', {
-      reply_markup: {
-        keyboard: [[{ text: 'Share Phone Number', request_contact: true }]],
-        one_time_keyboard: true,
-        resize_keyboard: true
-      }
-    });
-  }
-}
-
-// Function to broadcast messages to all tutors (admin only)
-export async function broadcastMessage(bot, message, context, adminChatId) {
-  const { Tutor } = context;
-  
-  try {
-    const tutors = await Tutor.find({ telegramChatId: { $exists: true, $ne: null } });
-    let successCount = 0;
-    let failCount = 0;
-    
-    for (const tutor of tutors) {
-      try {
-        await safeSend(bot, tutor.telegramChatId, message, { parse_mode: 'Markdown' });
-        successCount++;
-        // Add small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (err) {
-        console.error(`Failed to send broadcast to ${tutor.telegramChatId}:`, err.message);
-        failCount++;
-      }
-    }
-    
-    await safeSend(bot, adminChatId, `📢 Broadcast complete!\n\n✅ Sent: ${successCount}\n❌ Failed: ${failCount}`);
-  } catch (err) {
-    console.error('Error broadcasting message:', err);
-    await safeSend(bot, adminChatId, 'Error sending broadcast message.');
-  }
-}
-
-// Function to cleanup expired sessions (call periodically)
-export function cleanupExpiredSessions(userSessions, maxAge = 24 * 60 * 60 * 1000) { // 24 hours
-  const now = Date.now();
-  const expiredSessions = [];
-  
-  for (const [chatId, session] of Object.entries(userSessions)) {
-    if (session.lastActivity && (now - session.lastActivity) > maxAge) {
-      expiredSessions.push(chatId);
-    }
-  }
-  
-  expiredSessions.forEach(chatId => {
-    delete userSessions[chatId];
-    console.log(`🧹 Cleaned up expired session for ${chatId}`);
-  });
-  
-  return expiredSessions.length;
 }
