@@ -5,12 +5,14 @@ import {
   initializeTeachingLevels,
   initializeAvailability,
   getTick,
-  paginate
+  paginate,
+  buildFilterQuery
 } from '../utils/helpers.js';
 
 import {
   formatTutorProfile,
-  formatAssignment
+  formatAssignment,
+  formatAssignmentsList
 } from '../utils/format.js';
 
 import {
@@ -36,7 +38,8 @@ import {
   getRaceRequirementsMenu,
   getExperienceRequirementsMenu,
   getQualificationsRequirementsMenu,
-  getAssignmentFilterMenu
+  getAssignmentFilterMenu,
+  getAssignmentsMenu
 } from '../utils/menus.js';
 
 const ITEMS_PER_PAGE = 5;
@@ -210,6 +213,169 @@ async function showApplications(chatId, bot, Assignment, userSessions, page = 1)
   } catch (err) {
     console.error('Error showing applications:', err);
     safeSend(bot, chatId, 'There was an error retrieving your applications. Please try again later.');
+  }
+}
+
+// Handle assignment filters
+async function handleAssignmentFilters(bot, chatId, data) {
+  try {
+    const tutor = await Tutor.findOne({ telegramChatId: chatId });
+    if (!tutor) {
+      return safeSend(bot, chatId, 'Please start the bot first with /start');
+    }
+
+    // Initialize filters if they don't exist
+    if (!tutor.filters) {
+      tutor.filters = {};
+    }
+
+    switch (data) {
+      case 'filter_subject':
+        // Show subject menu based on level
+        const level = tutor.filters?.level || 'primary';
+        const subjectMenu = getSubjectMenu(level);
+        return safeSend(bot, chatId, 'Select a subject:', subjectMenu);
+
+      case 'filter_level':
+        return safeSend(bot, chatId, 'Select education level:', getLevelFilterMenu());
+
+      case 'filter_location':
+        return safeSend(bot, chatId, 'Select preferred location:', getLocationsMenu(tutor));
+
+      case 'filter_rate_range':
+        return safeSend(bot, chatId, 'Enter rate range (e.g., "30-50"):');
+
+      case 'filter_schedule':
+        return safeSend(bot, chatId, 'Select preferred schedule:', getScheduleFilterMenu());
+
+      case 'filter_student_count':
+        return safeSend(bot, chatId, 'Select number of students:', getStudentCountMenu());
+
+      case 'filter_requirements':
+        return safeSend(bot, chatId, 'Select tutor requirements:', getTutorRequirementsMenu());
+
+      case 'filter_start_date':
+        return safeSend(bot, chatId, 'Enter start date (DD/MM/YYYY):');
+
+      case 'apply_filters':
+        // Apply all filters and show filtered assignments
+        const assignments = await Assignment.find({
+          status: 'Open',
+          ...buildFilterQuery(tutor.filters)
+        });
+        return safeSend(bot, chatId, formatAssignmentsList(assignments), getAssignmentsMenu());
+
+      case 'clear_all_filters':
+        tutor.filters = {};
+        await tutor.save();
+        return safeSend(bot, chatId, 'All filters cleared', getAssignmentFilterMenu());
+
+      // Handle level selection
+      case 'level_primary':
+      case 'level_secondary':
+      case 'level_jc':
+      case 'level_international':
+        const selectedLevel = data.split('_')[1];
+        tutor.filters = { ...tutor.filters, level: selectedLevel };
+        await tutor.save();
+        return safeSend(bot, chatId, 'Select a subject:', getSubjectMenu(selectedLevel));
+
+      // Handle schedule selection
+      case 'schedule_weekdayMorning':
+      case 'schedule_weekdayAfternoon':
+      case 'schedule_weekdayEvening':
+      case 'schedule_weekendMorning':
+      case 'schedule_weekendAfternoon':
+      case 'schedule_weekendEvening':
+        const [day, time] = data.split('_')[1].match(/(weekday|weekend)(Morning|Afternoon|Evening)/);
+        tutor.filters = {
+          ...tutor.filters,
+          schedule: { ...tutor.filters?.schedule, [day]: { ...tutor.filters?.schedule?.[day], [time]: true } }
+        };
+        await tutor.save();
+        return safeSend(bot, chatId, 'Schedule updated', getScheduleFilterMenu());
+
+      // Handle student count
+      case 'students_1':
+      case 'students_2':
+      case 'students_3_5':
+      case 'students_6_plus':
+        const count = data.split('_')[1];
+        tutor.filters = { ...tutor.filters, studentCount: count };
+        await tutor.save();
+        return safeSend(bot, chatId, 'Student count updated', getStudentCountMenu());
+
+      // Handle tutor requirements
+      case 'req_gender':
+        return safeSend(bot, chatId, 'Select preferred gender:', getGenderRequirementsMenu());
+      case 'req_race':
+        return safeSend(bot, chatId, 'Select preferred race:', getRaceRequirementsMenu());
+      case 'req_experience':
+        return safeSend(bot, chatId, 'Select experience requirement:', getExperienceRequirementsMenu());
+      case 'req_qualifications':
+        return safeSend(bot, chatId, 'Select qualification requirement:', getQualificationsRequirementsMenu());
+
+      // Handle gender selection
+      case 'req_gender_male':
+      case 'req_gender_female':
+      case 'req_gender_any':
+        const gender = data.split('_')[2];
+        tutor.filters = {
+          ...tutor.filters,
+          tutorRequirements: { ...tutor.filters?.tutorRequirements, gender }
+        };
+        await tutor.save();
+        return safeSend(bot, chatId, 'Gender requirement updated', getGenderRequirementsMenu());
+
+      // Handle race selection
+      case 'req_race_chinese':
+      case 'req_race_malay':
+      case 'req_race_indian':
+      case 'req_race_eurasian':
+      case 'req_race_any':
+        const race = data.split('_')[2];
+        tutor.filters = {
+          ...tutor.filters,
+          tutorRequirements: { ...tutor.filters?.tutorRequirements, race }
+        };
+        await tutor.save();
+        return safeSend(bot, chatId, 'Race requirement updated', getRaceRequirementsMenu());
+
+      // Handle experience selection
+      case 'req_experience_none':
+      case 'req_experience_1_2':
+      case 'req_experience_3_5':
+      case 'req_experience_5_plus':
+        const experience = data.split('_')[2];
+        tutor.filters = {
+          ...tutor.filters,
+          tutorRequirements: { ...tutor.filters?.tutorRequirements, experience }
+        };
+        await tutor.save();
+        return safeSend(bot, chatId, 'Experience requirement updated', getExperienceRequirementsMenu());
+
+      // Handle qualifications selection
+      case 'req_qual_olevels':
+      case 'req_qual_alevels':
+      case 'req_qual_diploma':
+      case 'req_qual_degree':
+      case 'req_qual_masters':
+      case 'req_qual_phd':
+      case 'req_qual_any':
+        const qualification = data.split('_')[2];
+        tutor.filters = {
+          ...tutor.filters,
+          tutorRequirements: { ...tutor.filters?.tutorRequirements, qualifications: qualification }
+        };
+        await tutor.save();
+        return safeSend(bot, chatId, 'Qualification requirement updated', getQualificationsRequirementsMenu());
+
+      default:
+        return safeSend(bot, chatId, 'Invalid filter option');
+    }
+  } catch (err) {
+    console.error('Error handling assignment filters:', err);
+    return safeSend(bot, chatId, 'There was an error processing your request. Please try again.');
   }
 }
 
@@ -642,7 +808,7 @@ export async function handleUpdate(bot, context, update) {
           data.startsWith('req_race_') || 
           data.startsWith('req_experience_') || 
           data.startsWith('req_qual_')) {
-        return handleAssignmentFilters(ctx, data);
+        return handleAssignmentFilters(bot, chatId, data);
       }
 
       console.log(`⚠️ Unhandled callback: ${data}`);
