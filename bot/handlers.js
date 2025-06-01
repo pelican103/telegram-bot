@@ -870,6 +870,11 @@ async function postAssignmentToChannel(bot, assignment, channelId, botUsername) 
 // Handle assignment applications
 async function handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions) {
   try {
+    if (!userSessions[chatId]?.tutorId) {
+      console.warn(`🚫 tutorId missing in session for chatId ${chatId}`);
+      return await safeSend(bot, chatId, '❌ Please start with /start and share your contact before applying.');
+    }
+    
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) {
       await safeSend(bot, chatId, '❌ Assignment not found or may have been removed.');
@@ -1119,8 +1124,8 @@ async function handleCallbackQuery(
       return await showAdminPanel(chatId, bot);
     }
 
-    // Start posting assignment
-    if (data === 'admin_post_assignment') {
+    console.log("Callback data received:", JSON.stringify(data));
+    if (data.trim() === 'admin_post_assignment') {
       return await startAssignmentCreation(bot, chatId, userSessions);
     }
 
@@ -1157,7 +1162,7 @@ async function handleCallbackQuery(
 
     // Profile editing
     if (data === 'profile_edit') {
-      const tutor = await Tutor.findOne({ userId });
+      const tutor = await Tutor.findOne({ userId }) || await Tutor.findOne({ chatId });
       if (!tutor) {
         return await safeSend(bot, chatId, 'Profile not found. Please start with /start');
       }
