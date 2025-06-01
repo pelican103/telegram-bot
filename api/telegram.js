@@ -90,37 +90,29 @@ async function handleMessage(botInstance, context, message, handlers) {
   console.log(`📝 Message from ${userId} in chat ${chatId}: ${text}`);
   
   try {
+    // Handle contact sharing
+    if (message.contact) {
+      await handlers.handleContact(
+        botInstance, chatId, userId, message.contact, 
+        context.Tutor, context.userSessions, context.ADMIN_USERS
+      );
+      return;
+    }
+    
     // Handle /start command
     if (text === '/start' || text?.startsWith('/start ')) {
       const startParam = text.split(' ')[1];
-      
-      if (startParam) {
-        // Handle start parameter (e.g., apply_assignmentId)
-        await handlers.handleStartParameter(
-          botInstance, chatId, userId, startParam, 
-          context.Assignment, context.Tutor, context.userSessions, context.ADMIN_USERS
-        );
-        return;
-      }
-      
-      // Regular start command
-      await handleStartCommand(botInstance, chatId, userId, context, handlers);
+      await handlers.handleStart(
+        botInstance, chatId, userId, context.Tutor, 
+        context.userSessions, startParam
+      );
       return;
     }
     
     // Handle admin commands
     if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
       if (text === '/post_assignment') {
-        await handlers.handlePostAssignmentCommand(
-          botInstance, chatId, userId, context.ADMIN_USERS, context.userSessions
-        );
-        return;
-      }
-      
-      if (text?.startsWith('/view_applications')) {
-        await handlers.handleViewApplicationsCommand(
-          botInstance, chatId, userId, context.ADMIN_USERS, context.Assignment, text
-        );
+        await handlers.startAssignmentCreation(botInstance, chatId, context.userSessions);
         return;
       }
     }
@@ -128,11 +120,9 @@ async function handleMessage(botInstance, context, message, handlers) {
     // Handle user session states
     const userSession = context.userSessions[chatId];
     
-    if (userSession?.state === 'awaiting_assignment_details') {
-      await handlers.handleAssignmentDetails(
-        botInstance, chatId, text, context.Assignment, context.userSessions, 
-        context.CHANNEL_ID, BOT_USERNAME
-      );
+    // Handle assignment creation steps
+    if (userSession?.state === 'creating_assignment') {
+      await handlers.handleAssignmentStep(botInstance, chatId, text, context.userSessions);
       return;
     }
     
@@ -142,8 +132,12 @@ async function handleMessage(botInstance, context, message, handlers) {
       return;
     }
     
-    // Default response
-    await handlers.showMainMenu(chatId, botInstance, userId, context.ADMIN_USERS);
+    // Default response for unrecognized messages
+    if (userSession?.tutorId) {
+      await handlers.showMainMenu(chatId, botInstance, userId, context.ADMIN_USERS);
+    } else {
+      await handlers.safeSend(botInstance, chatId, 'Please start with /start to use this bot.');
+    }
     
   } catch (error) {
     console.error('❌ Error handling message:', error);
@@ -189,15 +183,7 @@ async function handleCallbackQuery(botInstance, context, callbackQuery, handlers
         
       case 'admin_post_assignment':
         if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
-          await handlers.handlePostAssignmentCommand(
-            botInstance, chatId, userId, context.ADMIN_USERS, context.userSessions
-          );
-        }
-        break;
-        
-      case 'admin_view_all_applications':
-        if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
-          await handlers.showAllApplications(chatId, botInstance, context.Assignment);
+          await handlers.startAssignmentCreation(botInstance, chatId, context.userSessions);
         }
         break;
         
@@ -234,6 +220,27 @@ async function handleSpecificCallbacks(botInstance, chatId, userId, data, contex
       botInstance, chatId, userId, assignmentId, context.Assignment, 
       context.Tutor, context.userSessions, context.ADMIN_USERS
     );
+    return;
+  }
+  
+  // Confirm application
+  if (data.startsWith('confirm_apply_')) {
+    const assignmentId = data.replace('confirm_apply_', '');
+    await handlers.handleConfirmApplication(
+      botInstance, chatId, userId, assignmentId, context.Assignment, 
+      context.Tutor, context.userSessions
+    );
+    return;
+  }
+  
+  // Post to channel
+  if (data.startsWith('post_to_channel_')) {
+    if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
+      const assignmentId = data.replace('post_to_channel_', '');
+      await handlers.postAssignmentToChannel(
+        botInstance, chatId, assignmentId, context.CHANNEL_ID, BOT_USERNAME
+      );
+    }
     return;
   }
   
@@ -277,284 +284,181 @@ async function handleAdminCallbacks(botInstance, chatId, data, context, handlers
     );
     return;
   }
-  
-  // Toggle assignment status
-  if (data.startsWith('admin_close_') || data.startsWith('admin_reopen_')) {
-    const assignmentId = data.replace(/^admin_(close|reopen)_/, '');
-    await handlers.toggleAssignmentStatus(botInstance, chatId, assignmentId, context.Assignment);
-    return;
-  }
-  
-  // Admin pagination
-  if (data.startsWith('admin_all_apps_page_')) {
-    const page = parseInt(data.replace('admin_all_apps_page_', ''));
-    await handlers.showAllApplications(chatId, botInstance, context.Assignment, page);
-    return;
-  }
 }
 
-// Handle profile-related callbacks
 async function handleProfileCallbacks(botInstance, chatId, data, context, handlers) {
   const userSession = context.userSessions[chatId];
-  if (!userSession || !userSession.tutorId) {
-    await handlers.safeSend(botInstance, chatId, 'Your session has expired. Please start again with /start');
+  
+  if (data.startsWith('edit_')) {
+    const field = data.replace('edit_', '');
+    const validFields = ['name', 'email', 'phone', 'subjects', 'experience', 'hourlyRate', 'availability'];
+    
+    if (validFields.includes(field)) {
+      context.userSessions[chatId] = {
+        ...userSession,
+        state: `awaiting_${field}`,
+        editingField: field
+      };
+      
+      const fieldNames = {
+        name: 'Name',
+        email: 'Email',
+        phone: 'Phone Number',
+        subjects: 'Subjects (comma-separated)',
+        experience: 'Experience',
+        hourlyRate: 'Hourly Rate',
+        availability: 'Availability'
+      };
+      
+      await handlers.safeSend(botInstance, chatId, 
+        `Please enter your new ${fieldNames[field]}:`
+      );
+    }
     return;
   }
-  
-  const tutor = await context.Tutor.findById(userSession.tutorId);
-  if (!tutor) {
-    await handlers.safeSend(botInstance, chatId, 'Tutor profile not found. Please start again.');
-    return;
-  }
-  
-  // Handle various profile editing actions
-  if (data === 'edit_personal_info') {
-    const menu = handlers.getPersonalInfoMenu(tutor);
-    await handlers.safeSend(botInstance, chatId, 'Edit Personal Information:', { reply_markup: menu });
-  } else if (data === 'edit_teaching_levels') {
-    const menu = handlers.getTeachingLevelsMenu(tutor);
-    await handlers.safeSend(botInstance, chatId, 'Edit Teaching Levels:', { reply_markup: menu });
-  } else if (data === 'edit_locations') {
-    const menu = handlers.getLocationsMenu(tutor);
-    await handlers.safeSend(botInstance, chatId, 'Select your preferred locations:', { reply_markup: menu });
-  } else if (data === 'edit_availability') {
-    const menu = handlers.getAvailabilityMenu(tutor);
-    await handlers.safeSend(botInstance, chatId, 'Select your availability:', { reply_markup: menu });
-  } else if (data === 'edit_hourly_rates') {
-    const menu = handlers.getHourlyRatesMenu(tutor);
-    await handlers.safeSend(botInstance, chatId, 'Edit Hourly Rates:', { reply_markup: menu });
-  }
-  
-  // Handle toggle callbacks for locations, availability, subjects
-  await handleToggleCallbacks(botInstance, chatId, data, tutor, context, handlers);
 }
 
-// Handle toggle callbacks (locations, availability, subjects)
-async function handleToggleCallbacks(botInstance, chatId, data, tutor, context, handlers) {
-  let updated = false;
-  
-  // Toggle location
-  if (data.startsWith('toggle_location_')) {
-    const location = data.replace('toggle_location_', '');
-    handlers.initializeLocations(tutor);
-    tutor.locations[location] = !tutor.locations[location];
-    updated = true;
-  }
-  
-  // Toggle availability
-  if (data.startsWith('toggle_availability_')) {
-    const slot = data.replace('toggle_availability_', '');
-    handlers.initializeAvailability(tutor);
-    tutor.availableTimeSlots[slot] = !tutor.availableTimeSlots[slot];
-    updated = true;
-  }
-  
-  // Toggle subjects
-  const subjectPrefixes = ['toggle_primary_', 'toggle_secondary_', 'toggle_jc_', 'toggle_international_'];
-  for (const prefix of subjectPrefixes) {
-    if (data.startsWith(prefix)) {
-      const subject = data.replace(prefix, '');
-      const level = prefix.replace('toggle_', '').replace('_', '');
-      handlers.initializeTeachingLevels(tutor);
-      tutor.teachingLevels[level][subject] = !tutor.teachingLevels[level][subject];
-      updated = true;
-      break;
-    }
-  }
-  
-  if (updated) {
-    await tutor.save();
-    
-    // Refresh the current menu
-    if (data.startsWith('toggle_location_')) {
-      const menu = handlers.getLocationsMenu(tutor);
-      await handlers.safeSend(botInstance, chatId, 'Select your preferred locations:', { reply_markup: menu });
-    } else if (data.startsWith('toggle_availability_')) {
-      const menu = handlers.getAvailabilityMenu(tutor);
-      await handlers.safeSend(botInstance, chatId, 'Select your availability:', { reply_markup: menu });
-    }
-    // Add more menu refreshes as needed
-  }
-}
-
-// Handle start command
-async function handleStartCommand(botInstance, chatId, userId, context, handlers) {
-  try {
-    // Find or create tutor
-    let tutor = await context.Tutor.findOne({ 
-      $or: [
-        { chatId: chatId },
-        { userId: userId }
-      ]
-    });
-    
-    if (!tutor) {
-      tutor = new context.Tutor({ 
-        chatId: chatId, 
-        userId: userId,
-        createdAt: new Date()
-      });
-      await tutor.save();
-      console.log(`✅ New tutor created: ${tutor._id}`);
-    } else {
-      // Update chatId if it has changed
-      if (tutor.chatId !== chatId) {
-        tutor.chatId = chatId;
-        await tutor.save();
-      }
-    }
-    
-    // Set user session
-    context.userSessions[chatId] = { tutorId: tutor._id };
-    
-    // Welcome message
-    const welcomeMsg = handlers.isAdmin(userId, context.ADMIN_USERS) 
-      ? '👋 Welcome back, Admin! Use the menu below to manage the tutoring platform.'
-      : '👋 Welcome to the Tutoring Platform! Find your perfect tutoring assignment or update your profile.';
-    
-    await handlers.safeSend(botInstance, chatId, welcomeMsg);
-    await handlers.showMainMenu(chatId, botInstance, userId, context.ADMIN_USERS);
-    
-  } catch (error) {
-    console.error('❌ Error in start command:', error);
-    await handlers.safeSend(botInstance, chatId, 'Welcome! There was a minor issue, but you can continue using the bot.');
-  }
-}
-
-// Handle profile edit
-async function handleProfileEdit(botInstance, chatId, context, handlers) {
-  try {
-    const userSession = context.userSessions[chatId];
-    if (!userSession || !userSession.tutorId) {
-      await handlers.safeSend(botInstance, chatId, 'Your session has expired. Please start again with /start');
-      return;
-    }
-    
-    const tutor = await context.Tutor.findById(userSession.tutorId);
-    if (!tutor) {
-      await handlers.safeSend(botInstance, chatId, 'Profile not found. Please start again.');
-      return;
-    }
-    
-    const profileText = handlers.formatTutorProfile(tutor);
-    const menu = handlers.getMainEditProfileMenu(tutor);
-    
-    await handlers.safeSend(botInstance, chatId, profileText, { 
-      parse_mode: 'Markdown',
-      reply_markup: menu 
-    });
-    
-  } catch (error) {
-    console.error('❌ Error showing profile edit:', error);
-    await handlers.safeSend(botInstance, chatId, 'There was an error loading your profile. Please try again.');
-  }
-}
-
-// Handle profile input
+// Handle profile input during editing
 async function handleProfileInput(botInstance, chatId, text, context, handlers) {
+  const userSession = context.userSessions[chatId];
+  const field = userSession.editingField;
+  
   try {
-    const userSession = context.userSessions[chatId];
     const tutor = await context.Tutor.findById(userSession.tutorId);
-    
     if (!tutor) {
-      await handlers.safeSend(botInstance, chatId, 'Profile not found. Please start again.');
+      await handlers.safeSend(botInstance, chatId, 'Tutor profile not found.');
       return;
     }
     
-    const field = userSession.state.replace('awaiting_', '');
-    
-    // Validate and save the input
+    // Update the specific field
     switch (field) {
-      case 'fullName':
-        tutor.fullName = text.trim();
+      case 'subjects':
+        tutor.subjects = text.split(',').map(s => s.trim()).filter(s => s.length > 0);
         break;
-      case 'email':
-        // Basic email validation
-        if (!text.includes('@')) {
-          await handlers.safeSend(botInstance, chatId, '❌ Please enter a valid email address.');
+      case 'hourlyRate':
+        const rate = parseFloat(text);
+        if (isNaN(rate) || rate <= 0) {
+          await handlers.safeSend(botInstance, chatId, 'Please enter a valid hourly rate (number).');
           return;
         }
-        tutor.email = text.trim();
-        break;
-      case 'contactNumber':
-        // Basic phone validation
-        const normalizedPhones = handlers.normalizePhone(text);
-        tutor.contactNumber = normalizedPhones[0];
+        tutor.hourlyRate = rate;
         break;
       default:
-        tutor[field] = text.trim();
+        tutor[field] = text;
     }
     
     await tutor.save();
-    userSession.state = null;
     
-    await handlers.safeSend(botInstance, chatId, '✅ Information updated successfully!');
+    // Clear session state
+    context.userSessions[chatId] = {
+      ...userSession,
+      state: null,
+      editingField: null
+    };
+    
+    await handlers.safeSend(botInstance, chatId, 
+      `✅ Your ${field} has been updated successfully!`
+    );
     
     // Show updated profile
-    const profileText = handlers.formatTutorProfile(tutor);
-    const menu = handlers.getMainEditProfileMenu(tutor);
-    
-    await handlers.safeSend(botInstance, chatId, profileText, { 
-      parse_mode: 'Markdown',
-      reply_markup: menu 
-    });
+    await handlers.showProfile(chatId, botInstance, userSession.tutorId, context.Tutor);
     
   } catch (error) {
-    console.error('❌ Error handling profile input:', error);
-    await handlers.safeSend(botInstance, chatId, 'There was an error saving your information. Please try again.');
+    console.error('❌ Error updating profile:', error);
+    await handlers.safeSend(botInstance, chatId, 
+      'Sorry, there was an error updating your profile. Please try again.'
+    );
   }
 }
 
-export default async function handler(req, res) {
-  // Handle GET requests (for health checks)
-  if (req.method === 'GET') {
-    return res.status(200).json({ 
-      status: 'active', 
-      message: 'Telegram bot endpoint is deployed',
-      timestamp: new Date().toISOString()
-    });
+// Handle profile edit menu
+async function handleProfileEdit(botInstance, chatId, context, handlers) {
+  const userSession = context.userSessions[chatId];
+  
+  if (!userSession?.tutorId) {
+    await handlers.safeSend(botInstance, chatId, 'Please complete your registration first.');
+    return;
   }
-
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+  
   try {
-    console.log('📩 Incoming Telegram POST update');
-    
-    // Validate request body
-    if (!req.body || typeof req.body !== 'object') {
-      console.log('⚠️ Invalid request body received');
-      return res.status(400).json({ error: 'Invalid request body' });
+    const tutor = await context.Tutor.findById(userSession.tutorId);
+    if (!tutor) {
+      await handlers.safeSend(botInstance, chatId, 'Tutor profile not found.');
+      return;
     }
-
-    // Connect to database
-    await connectToDatabase();
     
-    // Get bot instance
-    const botInstance = getBot();
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '✏️ Edit Name', callback_data: 'edit_name' },
+          { text: '📧 Edit Email', callback_data: 'edit_email' }
+        ],
+        [
+          { text: '📱 Edit Phone', callback_data: 'edit_phone' },
+          { text: '📚 Edit Subjects', callback_data: 'edit_subjects' }
+        ],
+        [
+          { text: '🎓 Edit Experience', callback_data: 'edit_experience' },
+          { text: '💰 Edit Hourly Rate', callback_data: 'edit_hourlyRate' }
+        ],
+        [
+          { text: '⏰ Edit Availability', callback_data: 'edit_availability' }
+        ],
+        [
+          { text: '🔙 Back to Main Menu', callback_data: 'main_menu' }
+        ]
+      ]
+    };
+    
+    await handlers.safeSend(botInstance, chatId, 
+      'Select what you would like to edit:', 
+      { reply_markup: keyboard }
+    );
+    
+  } catch (error) {
+    console.error('❌ Error showing profile edit menu:', error);
+    await handlers.safeSend(botInstance, chatId, 'Error loading profile edit menu.');
+  }
+}
 
-    // Create context object
+// Export the main handler function and utilities
+export default async function handler(req, res) {
+  try {
+    await connectToDatabase();
+    const botInstance = getBot();
+    
+    // Create context object with all necessary data
     const context = {
-      Tutor,
-      Assignment,
       userSessions,
       adminPostingSessions,
       ADMIN_USERS,
-      CHANNEL_ID
+      CHANNEL_ID,
+      BOT_USERNAME,
+      Tutor,
+      Assignment
     };
-
-    // Handle the update
-    await handleUpdate(botInstance, context, req.body);
-
-    // Respond to Telegram
-    res.status(200).json({ status: 'ok' });
+    
+    if (req.method === 'POST') {
+      const update = req.body;
+      await handleUpdate(botInstance, context, update);
+      res.status(200).json({ ok: true });
+    } else {
+      res.status(405).json({ error: 'Method not allowed' });
+    }
     
   } catch (error) {
-    console.error('❌ Telegram bot error:', error);
-    
-    // Don't expose internal errors to Telegram
-    res.status(200).json({ status: 'error_handled' });
+    console.error('❌ Handler error:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 }
+
+// Utility functions for external use
+export {
+  getBot,
+  connectToDatabase,
+  userSessions,
+  adminPostingSessions,
+  ADMIN_USERS,
+  CHANNEL_ID,
+  BOT_USERNAME
+};
