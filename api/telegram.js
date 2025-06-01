@@ -10,7 +10,7 @@ const userSessions = {};
 const adminPostingSessions = {};
 const ADMIN_USERS = process.env.ADMIN_USERS ? process.env.ADMIN_USERS.split(',').map(id => id.trim()) : [];
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const BOT_USERNAME = process.env.BOT_USERNAME; // Add this to your environment variables
+const BOT_USERNAME = process.env.BOT_USERNAME;
 
 // Store handlers reference
 let handlers = null;
@@ -45,14 +45,14 @@ function getBot() {
   return bot;
 }
 
-// Load handlers dynamically (since they're CommonJS)
+// Load handlers dynamically
 async function loadHandlers() {
   if (!handlers) {
     try {
-      // Dynamic import for CommonJS module
       const handlersModule = await import('../bot/handlers.js');
-      handlers = handlersModule.default || handlersModule;
+      handlers = handlersModule.default;
       console.log('✅ Handlers loaded successfully');
+      console.log('🔍 Available handler functions:', Object.keys(handlers));
     } catch (error) {
       console.error('❌ Failed to load handlers:', error);
       throw error;
@@ -94,7 +94,7 @@ async function handleMessage(botInstance, context, message, handlers) {
     if (message.contact) {
       await handlers.handleContact(
         botInstance, chatId, userId, message.contact, 
-        context.Tutor, context.userSessions, context.ADMIN_USERS
+        Tutor, userSessions, ADMIN_USERS
       );
       return;
     }
@@ -103,26 +103,26 @@ async function handleMessage(botInstance, context, message, handlers) {
     if (text === '/start' || text?.startsWith('/start ')) {
       const startParam = text.split(' ')[1];
       await handlers.handleStart(
-        botInstance, chatId, userId, context.Tutor, 
-        context.userSessions, startParam
+        botInstance, chatId, userId, Tutor, 
+        userSessions, startParam
       );
       return;
     }
     
     // Handle admin commands
-    if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
+    if (handlers.isAdmin(userId, ADMIN_USERS)) {
       if (text === '/post_assignment') {
-        await handlers.startAssignmentCreation(botInstance, chatId, context.userSessions);
+        await handlers.startAssignmentCreation(botInstance, chatId, userSessions);
         return;
       }
     }
     
     // Handle user session states
-    const userSession = context.userSessions[chatId];
+    const userSession = userSessions[chatId];
     
     // Handle assignment creation steps
     if (userSession?.state === 'creating_assignment') {
-      await handlers.handleAssignmentStep(botInstance, chatId, text, context.userSessions);
+      await handlers.handleAssignmentStep(botInstance, chatId, text, userSessions);
       return;
     }
     
@@ -132,16 +132,12 @@ async function handleMessage(botInstance, context, message, handlers) {
       return;
     }
     
-    // Default response for unrecognized messages
-    if (userSession?.tutorId) {
-      await handlers.showMainMenu(chatId, botInstance, userId, context.ADMIN_USERS);
-    } else {
-      await handlers.safeSend(botInstance, chatId, 'Please start with /start to use this bot.');
-    }
+    // Default response for unhandled messages
+    await handlers.safeSend(botInstance, chatId, 'Please use the menu buttons or type /start to begin.');
     
   } catch (error) {
     console.error('❌ Error handling message:', error);
-    await handlers.safeSend(botInstance, chatId, 'Sorry, there was an error processing your message. Please try again.');
+    await handlers.safeSend(botInstance, chatId, 'There was an error processing your message. Please try again.');
   }
 }
 
@@ -154,311 +150,390 @@ async function handleCallbackQuery(botInstance, context, callbackQuery, handlers
   console.log(`🔘 Callback from ${userId} in chat ${chatId}: ${data}`);
   
   try {
-    // Acknowledge the callback query
+    // Always answer callback query first
     await botInstance.answerCallbackQuery(callbackQuery.id);
     
-    // Handle different callback actions
-    switch (data) {
-      case 'main_menu':
-        await handlers.showMainMenu(chatId, botInstance, userId, context.ADMIN_USERS);
-        break;
-        
-      case 'view_assignments':
-        await handlers.showAssignments(chatId, botInstance, context.Assignment, context.userSessions);
-        break;
-        
-      case 'view_applications':
-        await handlers.showApplications(chatId, botInstance, context.Assignment, context.userSessions);
-        break;
-        
-      case 'profile_edit':
-        await handleProfileEdit(botInstance, chatId, context, handlers);
-        break;
-        
-      case 'admin_panel':
-        if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
-          await handlers.showAdminPanel(chatId, botInstance);
-        }
-        break;
-        
-      case 'admin_post_assignment':
-        if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
-          await handlers.startAssignmentCreation(botInstance, chatId, context.userSessions);
-        }
-        break;
-        
-      default:
-        await handleSpecificCallbacks(botInstance, chatId, userId, data, context, handlers);
+    // Handle main menu
+    if (data === 'main_menu') {
+      await handlers.showMainMenu(chatId, botInstance, userId, ADMIN_USERS);
+      return;
     }
+    
+    // Handle admin panel
+    if (data === 'admin_panel') {
+      if (!handlers.isAdmin(userId, ADMIN_USERS)) {
+        await handlers.safeSend(botInstance, chatId, 'You are not authorized to access the admin panel.');
+        return;
+      }
+      await handlers.showAdminPanel(chatId, botInstance);
+      return;
+    }
+    
+    // Handle assignment posting
+    if (data === 'admin_post_assignment') {
+      await handlers.startAssignmentCreation(botInstance, chatId, userSessions);
+      return;
+    }
+    
+    // Handle post to channel
+    if (data.startsWith('post_to_channel_')) {
+      const assignmentId = data.replace('post_to_channel_', '');
+      await handlers.postAssignmentToChannel(botInstance, chatId, assignmentId, CHANNEL_ID, BOT_USERNAME);
+      return;
+    }
+    
+    // Handle assignment views
+    if (data === 'view_assignments') {
+      await handlers.showAssignments(chatId, botInstance, Assignment, userSessions);
+      return;
+    }
+    
+    if (data.startsWith('assignments_page_')) {
+      const page = parseInt(data.replace('assignments_page_', ''));
+      await handlers.showAssignments(chatId, botInstance, Assignment, userSessions, page);
+      return;
+    }
+    
+    // Handle applications
+    if (data === 'view_applications') {
+      await handlers.showApplications(chatId, botInstance, Assignment, userSessions);
+      return;
+    }
+    
+    if (data.startsWith('applications_page_')) {
+      const page = parseInt(data.replace('applications_page_', ''));
+      await handlers.showApplications(chatId, botInstance, Assignment, userSessions, page);
+      return;
+    }
+    
+    // Handle assignment applications
+    if (data.startsWith('apply_')) {
+      const assignmentId = data.replace('apply_', '');
+      await handlers.handleAssignmentApplication(
+        botInstance, chatId, userId, assignmentId, 
+        Assignment, Tutor, userSessions, ADMIN_USERS
+      );
+      return;
+    }
+    
+    if (data.startsWith('confirm_apply_')) {
+      const assignmentId = data.replace('confirm_apply_', '');
+      await handlers.handleConfirmApplication(
+        botInstance, chatId, userId, assignmentId, 
+        Assignment, Tutor, userSessions
+      );
+      return;
+    }
+    
+    // Handle profile editing
+    if (data === 'profile_edit') {
+      const tutor = await Tutor.findOne({ userId: userId });
+      if (!tutor) {
+        await handlers.safeSend(botInstance, chatId, 'Profile not found. Please start with /start');
+        return;
+      }
+      
+      const profileMsg = handlers.formatTutorProfile(tutor);
+      await handlers.safeSend(botInstance, chatId, `${profileMsg}\n\nWhat would you like to edit?`, {
+        parse_mode: 'Markdown',
+        reply_markup: handlers.getMainEditProfileMenu(tutor)
+      });
+      return;
+    }
+    
+    // Handle personal info editing
+    if (data === 'edit_personal_info') {
+      const tutor = await Tutor.findOne({ userId: userId });
+      await handlers.safeSend(botInstance, chatId, 'Edit Personal Information:', {
+        reply_markup: handlers.getPersonalInfoMenu(tutor)
+      });
+      return;
+    }
+    
+    // Handle specific field edits
+    if (data.startsWith('edit_')) {
+      await handleFieldEdit(botInstance, chatId, userId, data, handlers);
+      return;
+    }
+    
+    // Handle toggles (locations, availability, subjects)
+    if (data.startsWith('toggle_')) {
+      await handleToggle(botInstance, chatId, userId, data, handlers);
+      return;
+    }
+    
+    // Handle dropdown selections (gender, race, education)
+    if (data.startsWith('set_')) {
+      await handleSelection(botInstance, chatId, userId, data, handlers);
+      return;
+    }
+    
+    // Default callback handling
+    await handlers.safeSend(botInstance, chatId, 'This action is not yet implemented.');
     
   } catch (error) {
     console.error('❌ Error handling callback query:', error);
-    await handlers.safeSend(botInstance, chatId, 'Sorry, there was an error processing your request. Please try again.');
+    await handlers.safeSend(botInstance, chatId, 'There was an error processing your request. Please try again.');
   }
 }
 
-// Handle specific callback patterns
-async function handleSpecificCallbacks(botInstance, chatId, userId, data, context, handlers) {
-  // Assignment pagination
-  if (data.startsWith('assignments_page_')) {
-    const page = parseInt(data.replace('assignments_page_', ''));
-    await handlers.showAssignments(chatId, botInstance, context.Assignment, context.userSessions, page);
-    return;
-  }
-  
-  // Applications pagination
-  if (data.startsWith('applications_page_')) {
-    const page = parseInt(data.replace('applications_page_', ''));
-    await handlers.showApplications(chatId, botInstance, context.Assignment, context.userSessions, page);
-    return;
-  }
-  
-  // Apply for assignment
-  if (data.startsWith('apply_')) {
-    const assignmentId = data.replace('apply_', '');
-    await handlers.handleAssignmentApplication(
-      botInstance, chatId, userId, assignmentId, context.Assignment, 
-      context.Tutor, context.userSessions, context.ADMIN_USERS
-    );
-    return;
-  }
-  
-  // Confirm application
-  if (data.startsWith('confirm_apply_')) {
-    const assignmentId = data.replace('confirm_apply_', '');
-    await handlers.handleConfirmApplication(
-      botInstance, chatId, userId, assignmentId, context.Assignment, 
-      context.Tutor, context.userSessions
-    );
-    return;
-  }
-  
-  // Post to channel
-  if (data.startsWith('post_to_channel_')) {
-    if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
-      const assignmentId = data.replace('post_to_channel_', '');
-      await handlers.postAssignmentToChannel(
-        botInstance, chatId, assignmentId, context.CHANNEL_ID, BOT_USERNAME
-      );
-    }
-    return;
-  }
-  
-  // Admin specific callbacks
-  if (handlers.isAdmin(userId, context.ADMIN_USERS)) {
-    await handleAdminCallbacks(botInstance, chatId, data, context, handlers);
-    return;
-  }
-  
-  // Profile editing callbacks
-  await handleProfileCallbacks(botInstance, chatId, data, context, handlers);
-}
-
-// Handle admin-specific callbacks
-async function handleAdminCallbacks(botInstance, chatId, data, context, handlers) {
-  // View assignment applications
-  if (data.startsWith('admin_view_assignment_')) {
-    const assignmentId = data.replace('admin_view_assignment_', '');
-    await handlers.showAssignmentApplications(chatId, botInstance, context.Assignment, assignmentId);
-    return;
-  }
-  
-  // Accept application
-  if (data.startsWith('admin_accept_')) {
-    const parts = data.replace('admin_accept_', '').split('_');
-    const assignmentId = parts[0];
-    const tutorId = parts[1];
-    await handlers.handleApplicationDecision(
-      botInstance, chatId, assignmentId, tutorId, 'Accepted', context.Assignment, context.Tutor
-    );
-    return;
-  }
-  
-  // Reject application
-  if (data.startsWith('admin_reject_')) {
-    const parts = data.replace('admin_reject_', '').split('_');
-    const assignmentId = parts[0];
-    const tutorId = parts[1];
-    await handlers.handleApplicationDecision(
-      botInstance, chatId, assignmentId, tutorId, 'Rejected', context.Assignment, context.Tutor
-    );
-    return;
-  }
-}
-
-async function handleProfileCallbacks(botInstance, chatId, data, context, handlers) {
-  const userSession = context.userSessions[chatId];
-  
-  if (data.startsWith('edit_')) {
-    const field = data.replace('edit_', '');
-    const validFields = ['name', 'email', 'phone', 'subjects', 'experience', 'hourlyRate', 'availability'];
-    
-    if (validFields.includes(field)) {
-      context.userSessions[chatId] = {
-        ...userSession,
-        state: `awaiting_${field}`,
-        editingField: field
-      };
-      
-      const fieldNames = {
-        name: 'Name',
-        email: 'Email',
-        phone: 'Phone Number',
-        subjects: 'Subjects (comma-separated)',
-        experience: 'Experience',
-        hourlyRate: 'Hourly Rate',
-        availability: 'Availability'
-      };
-      
-      await handlers.safeSend(botInstance, chatId, 
-        `Please enter your new ${fieldNames[field]}:`
-      );
-    }
-    return;
-  }
-}
-
-// Handle profile input during editing
+// Handle profile input
 async function handleProfileInput(botInstance, chatId, text, context, handlers) {
-  const userSession = context.userSessions[chatId];
-  const field = userSession.editingField;
+  const userSession = userSessions[chatId];
+  const field = userSession.state.replace('awaiting_', '');
   
   try {
-    const tutor = await context.Tutor.findById(userSession.tutorId);
+    const tutor = await Tutor.findOne({ userId: userSession.userId });
     if (!tutor) {
-      await handlers.safeSend(botInstance, chatId, 'Tutor profile not found.');
+      await handlers.safeSend(botInstance, chatId, 'Profile not found. Please start again.');
       return;
     }
     
-    // Update the specific field
-    switch (field) {
-      case 'subjects':
-        tutor.subjects = text.split(',').map(s => s.trim()).filter(s => s.length > 0);
-        break;
-      case 'hourlyRate':
-        const rate = parseFloat(text);
-        if (isNaN(rate) || rate <= 0) {
-          await handlers.safeSend(botInstance, chatId, 'Please enter a valid hourly rate (number).');
-          return;
-        }
-        tutor.hourlyRate = rate;
-        break;
-      default:
-        tutor[field] = text;
-    }
-    
+    // Update the field
+    tutor[field] = text.trim();
     await tutor.save();
     
-    // Clear session state
-    context.userSessions[chatId] = {
-      ...userSession,
-      state: null,
-      editingField: null
-    };
+    // Clear state
+    delete userSession.state;
+    delete userSession.userId;
     
-    await handlers.safeSend(botInstance, chatId, 
-      `✅ Your ${field} has been updated successfully!`
-    );
-    
-    // Show updated profile
-    await handlers.showProfile(chatId, botInstance, userSession.tutorId, context.Tutor);
+    await handlers.safeSend(botInstance, chatId, `✅ ${field} updated successfully!`, {
+      reply_markup: handlers.getPersonalInfoMenu(tutor)
+    });
     
   } catch (error) {
-    console.error('❌ Error updating profile:', error);
-    await handlers.safeSend(botInstance, chatId, 
-      'Sorry, there was an error updating your profile. Please try again.'
-    );
+    console.error('Error updating profile field:', error);
+    await handlers.safeSend(botInstance, chatId, 'There was an error updating your profile. Please try again.');
   }
 }
 
-// Handle profile edit menu
-async function handleProfileEdit(botInstance, chatId, context, handlers) {
-  const userSession = context.userSessions[chatId];
-  
-  if (!userSession?.tutorId) {
-    await handlers.safeSend(botInstance, chatId, 'Please complete your registration first.');
-    return;
-  }
-  
+// Handle field editing
+async function handleFieldEdit(botInstance, chatId, userId, data, handlers) {
   try {
-    const tutor = await context.Tutor.findById(userSession.tutorId);
+    const fieldMappings = {
+      'edit_fullName': { field: 'fullName', prompt: 'Enter your full name:' },
+      'edit_email': { field: 'email', prompt: 'Enter your email address:' },
+      'edit_teaching_levels': () => handlers.getTeachingLevelsMenu,
+      'edit_locations': () => handlers.getLocationsMenu,
+      'edit_availability': () => handlers.getAvailabilityMenu,
+      'edit_hourly_rates': () => handlers.getHourlyRatesMenu,
+      'edit_gender_menu': () => handlers.getGenderMenu,
+      'edit_race_menu': () => handlers.getRaceMenu,
+      'edit_education_menu': () => handlers.getEducationMenu,
+    };
+    
+    const tutor = await Tutor.findOne({ userId: userId });
     if (!tutor) {
-      await handlers.safeSend(botInstance, chatId, 'Tutor profile not found.');
+      await handlers.safeSend(botInstance, chatId, 'Profile not found.');
       return;
     }
     
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '✏️ Edit Name', callback_data: 'edit_name' },
-          { text: '📧 Edit Email', callback_data: 'edit_email' }
-        ],
-        [
-          { text: '📱 Edit Phone', callback_data: 'edit_phone' },
-          { text: '📚 Edit Subjects', callback_data: 'edit_subjects' }
-        ],
-        [
-          { text: '🎓 Edit Experience', callback_data: 'edit_experience' },
-          { text: '💰 Edit Hourly Rate', callback_data: 'edit_hourlyRate' }
-        ],
-        [
-          { text: '⏰ Edit Availability', callback_data: 'edit_availability' }
-        ],
-        [
-          { text: '🔙 Back to Main Menu', callback_data: 'main_menu' }
-        ]
-      ]
-    };
+    const mapping = fieldMappings[data];
     
-    await handlers.safeSend(botInstance, chatId, 
-      'Select what you would like to edit:', 
-      { reply_markup: keyboard }
-    );
-    
-  } catch (error) {
-    console.error('❌ Error showing profile edit menu:', error);
-    await handlers.safeSend(botInstance, chatId, 'Error loading profile edit menu.');
-  }
-}
-
-// Export the main handler function and utilities
-export default async function handler(req, res) {
-  try {
-    await connectToDatabase();
-    const botInstance = getBot();
-    
-    // Create context object with all necessary data
-    const context = {
-      userSessions,
-      adminPostingSessions,
-      ADMIN_USERS,
-      CHANNEL_ID,
-      BOT_USERNAME,
-      Tutor,
-      Assignment
-    };
-    
-    if (req.method === 'POST') {
-      const update = req.body;
-      await handleUpdate(botInstance, context, update);
-      res.status(200).json({ ok: true });
+    if (typeof mapping === 'function') {
+      const menu = mapping()(tutor);
+      await handlers.safeSend(botInstance, chatId, 'Please select an option:', { reply_markup: menu });
+    } else if (mapping) {
+      userSessions[chatId] = { 
+        ...userSessions[chatId],
+        state: `awaiting_${mapping.field}`,
+        userId: userId
+      };
+      await handlers.safeSend(botInstance, chatId, mapping.prompt);
     } else {
-      res.status(405).json({ error: 'Method not allowed' });
+      // Handle subject menus
+      if (data === 'edit_primary_subjects') {
+        await handlers.safeSend(botInstance, chatId, 'Select Primary subjects you can teach:', {
+          reply_markup: handlers.getPrimarySubjectsMenu(tutor)
+        });
+      } else if (data === 'edit_secondary_subjects') {
+        await handlers.safeSend(botInstance, chatId, 'Select Secondary subjects you can teach:', {
+          reply_markup: handlers.getSecondarySubjectsMenu(tutor)
+        });
+      } else if (data === 'edit_jc_subjects') {
+        await handlers.safeSend(botInstance, chatId, 'Select JC subjects you can teach:', {
+          reply_markup: handlers.getJCSubjectsMenu(tutor)
+        });
+      } else if (data === 'edit_international_subjects') {
+        await handlers.safeSend(botInstance, chatId, 'Select International subjects you can teach:', {
+          reply_markup: handlers.getInternationalSubjectsMenu(tutor)
+        });
+      }
     }
     
   } catch (error) {
-    console.error('❌ Handler error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    console.error('Error handling field edit:', error);
+    await handlers.safeSend(botInstance, chatId, 'There was an error. Please try again.');
   }
 }
 
-// Utility functions for external use
-export {
-  getBot,
-  connectToDatabase,
-  userSessions,
-  adminPostingSessions,
-  ADMIN_USERS,
-  CHANNEL_ID,
-  BOT_USERNAME
-};
+// Handle toggles
+async function handleToggle(botInstance, chatId, userId, data, handlers) {
+  try {
+    const tutor = await Tutor.findOne({ userId: userId });
+    if (!tutor) {
+      await handlers.safeSend(botInstance, chatId, 'Profile not found.');
+      return;
+    }
+    
+    // Parse toggle data
+    if (data.startsWith('toggle_location_')) {
+      const location = data.replace('toggle_location_', '');
+      handlers.initializeLocations(tutor);
+      tutor.locations[location] = !tutor.locations[location];
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, 'Location preference updated!', {
+        reply_markup: handlers.getLocationsMenu(tutor)
+      });
+      
+    } else if (data.startsWith('toggle_availability_')) {
+      const slot = data.replace('toggle_availability_', '');
+      handlers.initializeAvailability(tutor);
+      tutor.availableTimeSlots[slot] = !tutor.availableTimeSlots[slot];
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, 'Availability updated!', {
+        reply_markup: handlers.getAvailabilityMenu(tutor)
+      });
+      
+    } else if (data.startsWith('toggle_primary_')) {
+      const subject = data.replace('toggle_primary_', '');
+      handlers.initializeTeachingLevels(tutor);
+      tutor.teachingLevels.primary[subject] = !tutor.teachingLevels.primary[subject];
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, 'Subject preference updated!', {
+        reply_markup: handlers.getPrimarySubjectsMenu(tutor)
+      });
+      
+    } else if (data.startsWith('toggle_secondary_')) {
+      const subject = data.replace('toggle_secondary_', '');
+      handlers.initializeTeachingLevels(tutor);
+      tutor.teachingLevels.secondary[subject] = !tutor.teachingLevels.secondary[subject];
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, 'Subject preference updated!', {
+        reply_markup: handlers.getSecondarySubjectsMenu(tutor)
+      });
+      
+    } else if (data.startsWith('toggle_jc_')) {
+      const subject = data.replace('toggle_jc_', '');
+      handlers.initializeTeachingLevels(tutor);
+      tutor.teachingLevels.jc[subject] = !tutor.teachingLevels.jc[subject];
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, 'Subject preference updated!', {
+        reply_markup: handlers.getJCSubjectsMenu(tutor)
+      });
+      
+    } else if (data.startsWith('toggle_international_')) {
+      const subject = data.replace('toggle_international_', '');
+      handlers.initializeTeachingLevels(tutor);
+      tutor.teachingLevels.international[subject] = !tutor.teachingLevels.international[subject];
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, 'Subject preference updated!', {
+        reply_markup: handlers.getInternationalSubjectsMenu(tutor)
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error handling toggle:', error);
+    await handlers.safeSend(botInstance, chatId, 'There was an error updating your preference. Please try again.');
+  }
+}
+
+// Handle selections
+async function handleSelection(botInstance, chatId, userId, data, handlers) {
+  try {
+    const tutor = await Tutor.findOne({ userId: userId });
+    if (!tutor) {
+      await handlers.safeSend(botInstance, chatId, 'Profile not found.');
+      return;
+    }
+    
+    if (data.startsWith('set_gender_')) {
+      const gender = data.replace('set_gender_', '');
+      tutor.gender = gender.charAt(0).toUpperCase() + gender.slice(1);
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, `✅ Gender set to ${tutor.gender}`, {
+        reply_markup: handlers.getPersonalInfoMenu(tutor)
+      });
+      
+    } else if (data.startsWith('set_race_')) {
+      const race = data.replace('set_race_', '');
+      tutor.race = race.charAt(0).toUpperCase() + race.slice(1);
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, `✅ Race set to ${tutor.race}`, {
+        reply_markup: handlers.getPersonalInfoMenu(tutor)
+      });
+      
+    } else if (data.startsWith('set_education_')) {
+      const education = data.replace('set_education_', '');
+      const educationMap = {
+        'alevels': 'A Levels',
+        'diploma': 'Diploma',
+        'degree': 'Degree',
+        'masters': 'Masters',
+        'phd': 'PhD',
+        'others': 'Others'
+      };
+      tutor.highestEducation = educationMap[education] || education;
+      await tutor.save();
+      
+      await handlers.safeSend(botInstance, chatId, `✅ Education set to ${tutor.highestEducation}`, {
+        reply_markup: handlers.getPersonalInfoMenu(tutor)
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error handling selection:', error);
+    await handlers.safeSend(botInstance, chatId, 'There was an error updating your selection. Please try again.');
+  }
+}
+
+// Main webhook handler function
+export default async function handler(req, res) {
+  try {
+    // Only handle POST requests
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    
+    console.log('🌐 Webhook triggered');
+    
+    // Connect to database
+    await connectToDatabase();
+    
+    // Get bot instance
+    const botInstance = getBot();
+    
+    // Parse update
+    const update = req.body;
+    
+    // Create context object
+    const context = {
+      Tutor,
+      Assignment,
+      userSessions,
+      ADMIN_USERS,
+      CHANNEL_ID,
+      BOT_USERNAME
+    };
+    
+    // Handle the update
+    await handleUpdate(botInstance, context, update);
+    
+    return res.status(200).json({ ok: true });
+    
+  } catch (error) {
+    console.error('❌ Webhook error:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+}
