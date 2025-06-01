@@ -1,9 +1,5 @@
 // utils/helpers.js
 
-/**
- * Normalize phone number to generate search variations
- * Handles Singapore phone numbers with and without country code
- */
 export function normalizePhone(phone) {
   const digits = phone.replace(/\D/g, '');
   const variations = [digits];
