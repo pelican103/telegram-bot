@@ -8,18 +8,18 @@ let isConnected = false;
 let handlers = null;
 
 const userSessions = {};
-const ADMIN_USERS = process.env.ADMIN_USERS ? process.env.ADMIN_USERS.split(',').map(id => id.trim()) : [];
+const ADMIN_USERS = process.env.ADMIN_USERS?.split(',').map(id => id.trim()) || [];
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const BOT_USERNAME = process.env.BOT_USERNAME;
 
-// Connect to MongoDB
+// DB connection
 async function connectToDatabase() {
   if (!isConnected) {
     try {
       await mongoose.connect(process.env.MONGODB_URI, {
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
+        socketTimeoutMS: 45000
       });
       isConnected = true;
       console.log('✅ MongoDB connected (Vercel)');
@@ -30,16 +30,13 @@ async function connectToDatabase() {
   }
 }
 
-// Initialize Telegram bot
+// Bot init
 function getBot() {
   if (!bot) {
-    if (!process.env.BOT_TOKEN) {
-      throw new Error('BOT_TOKEN environment variable is required');
-    }
+    if (!process.env.BOT_TOKEN) throw new Error('BOT_TOKEN is required');
     console.log('🤖 Initializing Telegram bot...');
     bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
-    console.log('📛 Using bot token starts with:', process.env.BOT_TOKEN?.slice(0, 8));
-    console.log('🤖 Bot initialized successfully');
+    console.log('📛 Using bot token starting with:', process.env.BOT_TOKEN.slice(0, 8));
   }
   return bot;
 }
@@ -48,54 +45,13 @@ function getBot() {
 async function loadHandlers() {
   if (!handlers) {
     const handlersModule = await import('../bot/handlers.js');
-    handlers = handlersModule; // not .default because handlers.js uses named exports
-    console.log('✅ Handlers loaded successfully');
+    handlers = handlersModule;
+    console.log('✅ Handlers loaded');
   }
   return handlers;
 }
 
-// Handle update from Telegram
-async function handleUpdate(botInstance, context, update) {
-  const handlers = await loadHandlers();
-
-  if (update.message) {
-    await handleMessage(botInstance, context, update.message, handlers);
-  } else if (update.callback_query) {
-    await handleCallbackQuery(botInstance, context, update.callback_query, handlers);
-  }
-}
-
-// Minimal versions of handlers (you may keep your full versions)
-async function handleMessage(bot, context, message, handlers) {
-  const chatId = message.chat.id;
-  const userId = message.from.id;
-  const text = message.text;
-
-  if (message.contact) {
-    await handlers.handleContact(bot, chatId, userId, message.contact, Tutor, userSessions, ADMIN_USERS);
-  } else if (text?.startsWith('/start')) {
-    const startParam = text.split(' ')[1];
-    await handlers.handleStart(bot, chatId, userId, Tutor, userSessions, startParam);
-  } else {
-    await handlers.safeSend(bot, chatId, 'Please use the menu or type /start.');
-  }
-}
-
-async function handleCallbackQuery(bot, context, callbackQuery, handlers) {
-  const chatId = callbackQuery.message.chat.id;
-  const userId = callbackQuery.from.id;
-  const data = callbackQuery.data;
-
-  await bot.answerCallbackQuery(callbackQuery.id);
-
-  if (data === 'main_menu') {
-    await handlers.showMainMenu(chatId, bot, userId, ADMIN_USERS);
-  } else {
-    await handlers.safeSend(bot, chatId, 'Action not implemented.');
-  }
-}
-
-// Exported Vercel API handler
+// Webhook update handler
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') {
@@ -106,6 +62,7 @@ export default async function handler(req, res) {
 
     await connectToDatabase();
     const botInstance = getBot();
+    const handlers = await loadHandlers();
     const update = req.body;
 
     const context = {
@@ -117,12 +74,40 @@ export default async function handler(req, res) {
       BOT_USERNAME
     };
 
-    await handleUpdate(botInstance, context, update);
+    if (update.message) {
+      const { chat, from, text } = update.message;
+      await handlers.handleMessage(
+        botInstance,
+        chat.id,
+        from.id,
+        text,
+        update.message,
+        Tutor,
+        Assignment,
+        userSessions,
+        ADMIN_USERS
+      );
+    } else if (update.callback_query) {
+      const { message, from, data } = update.callback_query;
+      await botInstance.answerCallbackQuery(update.callback_query.id);
+      await handlers.handleCallbackQuery(
+        botInstance,
+        message.chat.id,
+        from.id,
+        data,
+        Assignment,
+        Tutor,
+        userSessions,
+        ADMIN_USERS,
+        CHANNEL_ID,
+        BOT_USERNAME
+      );
+    }
 
     return res.status(200).json({ ok: true });
 
-  } catch (error) {
-    console.error('❌ Webhook error:', error);
-    return res.status(500).json({ error: 'Internal server error', message: error.message });
+  } catch (err) {
+    console.error('❌ Webhook error:', err);
+    return res.status(500).json({ error: 'Internal Server Error', message: err.message });
   }
 }

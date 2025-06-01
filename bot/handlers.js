@@ -1093,6 +1093,135 @@ async function adminViewAllApplications(bot, chatId, Assignment) {
     await safeSend(bot, chatId, '❌ An error occurred while loading applications. Please try again.');
   }
 }
+async function handleCallbackQuery(
+  bot,
+  chatId,
+  userId,
+  data,
+  Assignment,
+  Tutor,
+  userSessions,
+  ADMIN_USERS,
+  CHANNEL_ID,
+  BOT_USERNAME
+) {
+  try {
+    // View main menu
+    if (data === 'main_menu') {
+      return await showMainMenu(chatId, bot, userId, ADMIN_USERS);
+    }
+
+    // Admin panel access
+    if (data === 'admin_panel') {
+      if (!isAdmin(userId, ADMIN_USERS)) {
+        return await safeSend(bot, chatId, 'You are not authorized to access the admin panel.');
+      }
+      return await showAdminPanel(chatId, bot);
+    }
+
+    // Start posting assignment
+    if (data === 'admin_post_assignment') {
+      return await startAssignmentCreation(bot, chatId, userSessions);
+    }
+
+    // View assignments (pagination supported)
+    if (data === 'view_assignments') {
+      return await viewAssignments(bot, chatId, 0, Assignment);
+    }
+
+    if (data.startsWith('assignments_page_')) {
+      const page = parseInt(data.replace('assignments_page_', ''), 10);
+      return await viewAssignments(bot, chatId, page, Assignment);
+    }
+
+    // View tutor's own applications
+    if (data === 'view_applications') {
+      return await viewMyApplications(bot, chatId, userSessions, Assignment);
+    }
+
+    // Admin: View all applications
+    if (data === 'admin_view_all_applications') {
+      return await adminViewAllApplications(bot, chatId, Assignment);
+    }
+
+    // Admin: Manage assignments
+    if (data === 'admin_manage_assignments') {
+      return await adminManageAssignments(bot, chatId, Assignment);
+    }
+
+    // Apply for assignment
+    if (data.startsWith('apply_')) {
+      const assignmentId = data.replace('apply_', '');
+      return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
+    }
+
+    // Profile editing
+    if (data === 'profile_edit') {
+      const tutor = await Tutor.findOne({ userId });
+      if (!tutor) {
+        return await safeSend(bot, chatId, 'Profile not found. Please start with /start');
+      }
+
+      const profileMsg = formatTutorProfile(tutor);
+      return await safeSend(bot, chatId, `${profileMsg}\n\nWhat would you like to edit?`, {
+        parse_mode: 'Markdown',
+        reply_markup: getMainEditProfileMenu(tutor)
+      });
+    }
+
+    // Personal info menu
+    if (data === 'edit_personal_info') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Edit Personal Information:', {
+        reply_markup: getPersonalInfoMenu(tutor)
+      });
+    }
+
+    // Fallback
+    return await safeSend(bot, chatId, '❓ This action is not yet implemented.');
+  } catch (error) {
+    console.error('❌ Error in handleCallbackQuery:', error);
+    return await safeSend(bot, chatId, 'An error occurred. Please try again.');
+  }
+}
+
+async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignment, userSessions, ADMIN_USERS) {
+  try {
+    if (message.contact) {
+      return await handleContact(bot, chatId, userId, message.contact, Tutor, userSessions, ADMIN_USERS);
+    }
+
+    if (text?.startsWith('/start')) {
+      const startParam = text.split(' ')[1];
+      return await handleStart(bot, chatId, userId, Tutor, userSessions, startParam);
+    }
+
+    const session = userSessions[chatId];
+
+    if (session?.state === 'creating_assignment') {
+      return await handleAssignmentStep(bot, chatId, text, userSessions);
+    }
+
+    if (session?.state?.startsWith('awaiting_')) {
+      const field = session.state.replace('awaiting_', '');
+      const tutor = await Tutor.findOne({ userId });
+      if (!tutor) return await safeSend(bot, chatId, 'Profile not found.');
+      tutor[field] = text.trim();
+      await tutor.save();
+      delete session.state;
+      delete session.userId;
+      return await safeSend(bot, chatId, `✅ ${field} updated successfully!`, {
+        reply_markup: getPersonalInfoMenu(tutor)
+      });
+    }
+
+    return await safeSend(bot, chatId, 'Please use the menu buttons or type /start to begin.');
+  } catch (err) {
+    console.error('❌ Message error:', err);
+    return await safeSend(bot, chatId, 'There was an error. Please try again.');
+  }
+}
+
 
 // Admin manage assignments
 async function adminManageAssignments(bot, chatId, Assignment) {
@@ -1136,6 +1265,8 @@ async function adminManageAssignments(bot, chatId, Assignment) {
 // Export all functions (ES modules)
 export {
   // Utility functions
+  handleCallbackQuery,
+  handleMessage,
   normalizePhone,
   parseNaturalDate,
   validateLevel,
