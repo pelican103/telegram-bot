@@ -12,7 +12,35 @@ const assignmentSchema = new mongoose.Schema({
   // Academic Information
   level: {
     type: String,
-    enum: ['Primary', 'Secondary', 'JC', 'International'],
+    required: true,
+    enum: [
+      // Primary levels
+      'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6',
+      // Secondary levels  
+      'Secondary 1', 'Secondary 2', 'Secondary 3', 'Secondary 4', 'Secondary 5',
+      // JC levels
+      'JC 1', 'JC 2',
+      // Other levels
+      'Polytechnic', 'University', 'Adult Learning'
+    ]
+  },
+  
+  frequency: {
+    type: String,
+    required: true,
+    enum: [
+      'Once a week',
+      'Twice a week', 
+      '3 times a week',
+      '4 times a week',
+      '5 times a week',
+      'Daily',
+      'Flexible'
+    ]
+  },
+  
+  startDate: {
+    type: Date,
     required: true
   },
   subject: {
@@ -32,11 +60,6 @@ const assignmentSchema = new mongoose.Schema({
     weekendMorning: Boolean,
     weekendAfternoon: Boolean,
     weekendEvening: Boolean
-  },
-  frequency: {
-    type: String,
-    enum: ['Once', 'Twice', 'Thrice', 'More than 3 times'],
-    required: true
   },
   duration: {
     type: String,

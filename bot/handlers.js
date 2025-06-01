@@ -9,6 +9,116 @@ function normalizePhone(phone) {
   ];
   return [...new Set(variations)];
 }
+function parseNaturalDate(dateString) {
+  const today = new Date();
+  const normalizedDate = dateString.toLowerCase().trim();
+  
+  // Handle "next monday", "next tuesday", etc.
+  const nextDayMatch = normalizedDate.match(/^next\s+(\w+)$/);
+  if (nextDayMatch) {
+    const dayName = nextDayMatch[1];
+    const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const targetDay = daysOfWeek.indexOf(dayName);
+    
+    if (targetDay !== -1) {
+      const currentDay = today.getDay();
+      let daysToAdd = targetDay - currentDay;
+      if (daysToAdd <= 0) daysToAdd += 7; // Next week
+      
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + daysToAdd);
+      return targetDate;
+    }
+  }
+  
+  // Handle other natural language patterns
+  switch (normalizedDate) {
+    case 'today':
+      return new Date();
+    case 'tomorrow':
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+      return tomorrow;
+    case 'next week':
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      return nextWeek;
+    default:
+      // Try to parse as regular date
+      const parsedDate = new Date(dateString);
+      if (isNaN(parsedDate.getTime())) {
+        throw new Error(`Unable to parse date: ${dateString}`);
+      }
+      return parsedDate;
+  }
+}
+
+function validateLevel(level) {
+  const validLevels = [
+    'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6',
+    'Secondary 1', 'Secondary 2', 'Secondary 3', 'Secondary 4', 'Secondary 5',
+    'JC 1', 'JC 2', 'Polytechnic', 'University', 'Adult Learning'
+  ];
+  
+  // Try to normalize the input
+  const normalizedLevel = level.trim();
+  
+  // Check for exact match
+  if (validLevels.includes(normalizedLevel)) {
+    return normalizedLevel;
+  }
+  
+  // Try to fix common variations
+  const levelMap = {
+    'primary 6': 'Primary 6',
+    'p6': 'Primary 6',
+    'sec 1': 'Secondary 1',
+    's1': 'Secondary 1',
+    'junior college 1': 'JC 1',
+    // Add more mappings as needed
+  };
+  
+  const mapped = levelMap[normalizedLevel.toLowerCase()];
+  if (mapped) {
+    return mapped;
+  }
+  
+  throw new Error(`Invalid level: ${level}. Valid options are: ${validLevels.join(', ')}`);
+}
+
+function validateFrequency(frequency) {
+  const validFrequencies = [
+    'Once a week', 'Twice a week', '3 times a week', 
+    '4 times a week', '5 times a week', 'Daily', 'Flexible'
+  ];
+  
+  // Try to normalize the input
+  const normalizedFreq = frequency.trim();
+  
+  // Check for exact match
+  if (validFrequencies.includes(normalizedFreq)) {
+    return normalizedFreq;
+  }
+  
+  // Try to fix common variations
+  const frequencyMap = {
+    '2 times per week': 'Twice a week',
+    '2 times a week': 'Twice a week',
+    'twice per week': 'Twice a week',
+    '1 time per week': 'Once a week',
+    'once per week': 'Once a week',
+    '3x per week': '3 times a week',
+    'thrice a week': '3 times a week',
+    // Add more mappings as needed
+  };
+  
+  const mapped = frequencyMap[normalizedFreq.toLowerCase()];
+  if (mapped) {
+    return mapped;
+  }
+  
+  throw new Error(`Invalid frequency: ${frequency}. Valid options are: ${validFrequencies.join(', ')}`);
+}
 
 function initializeTeachingLevels(tutor) {
   if (!tutor.teachingLevels) {
@@ -850,25 +960,21 @@ Just copy and modify the above format with your assignment details.`;
 }
 
 // Handle assignment details input from admin
-async function handleAssignmentDetails(bot, chatId, text, Assignment, userSessions, channelId, botUsername) {
+async function handleAssignmentDetails(bot, chatId, text, Assignment, userSessions, CHANNEL_ID, BOT_USERNAME) {
   try {
-    const assignmentData = parseAssignmentInput(text);
+    // Parse the assignment details from text
+    const assignmentData = parseAssignmentText(text); // You'll need to implement this
     
-    // Validate required fields
-    const requiredFields = ['level', 'subject', 'location', 'rate'];
-    const missingFields = requiredFields.filter(field => !assignmentData[field]);
-    
-    if (missingFields.length > 0) {
-      return safeSend(bot, chatId, `❌ Missing required fields: ${missingFields.join(', ')}\n\nPlease provide all required information.`);
-    }
-    
-    // Create new assignment
-    const assignment = new Assignment({
+    // Validate and convert the data
+    const processedData = {
       ...assignmentData,
-      createdAt: new Date(),
-      applicants: []
-    });
+      startDate: parseNaturalDate(assignmentData.startDate),
+      level: validateLevel(assignmentData.level),
+      frequency: validateFrequency(assignmentData.frequency)
+    };
     
+    // Create the assignment
+    const assignment = new Assignment(processedData);
     await assignment.save();
     
     // Post to channel if channel ID is configured
@@ -894,9 +1000,23 @@ async function handleAssignmentDetails(bot, chatId, text, Assignment, userSessio
     // Show admin panel again
     await showAdminPanel(chatId, bot);
     
-  } catch (err) {
-    console.error('Error creating assignment:', err);
-    safeSend(bot, chatId, 'There was an error creating the assignment. Please try again.');
+  }catch (error) {
+    console.error('Error creating assignment:', error);
+    
+    // Send user-friendly error message
+    let errorMessage = 'There was an error creating the assignment. Please check:\n\n';
+    
+    if (error.message.includes('date')) {
+      errorMessage += '📅 Date format - try "today", "tomorrow", "next Monday", or DD/MM/YYYY\n';
+    }
+    if (error.message.includes('level')) {
+      errorMessage += '🎓 Level - use formats like "Primary 1", "Secondary 3", "JC 1"\n';
+    }
+    if (error.message.includes('frequency')) {
+      errorMessage += '📊 Frequency - use "Once a week", "Twice a week", etc.\n';
+    }
+    
+    await bot.sendMessage(chatId, errorMessage);
   }
 }
 
@@ -915,20 +1035,9 @@ async function handleViewApplicationsCommand(bot, chatId, userId, ADMIN_USERS, A
     await showAllApplications(chatId, bot, Assignment);
   }
 }
-
-// Check if user can apply (not admin)
-function canUserApply(userId, ADMIN_USERS) {
-  return !isAdmin(userId, ADMIN_USERS);
-}
-
 // Handle assignment application
 async function handleAssignmentApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions, ADMIN_USERS) {
   try {
-    // Check if user is admin
-    if (!canUserApply(userId, ADMIN_USERS)) {
-      return safeSend(bot, chatId, '❌ Admins cannot apply for assignments.');
-    }
-    
     // Check if user session exists
     if (!userSessions[chatId] || !userSessions[chatId].tutorId) {
       return safeSend(bot, chatId, 'Your session has expired. Please start again with /start');
@@ -1052,11 +1161,6 @@ async function handleStartParameter(bot, chatId, userId, startParam, Assignment,
   if (startParam && startParam.startsWith('apply_')) {
     const assignmentId = startParam.replace('apply_', '');
     
-    // Check if user is admin
-    if (!canUserApply(userId, ADMIN_USERS)) {
-      return safeSend(bot, chatId, '❌ Admins cannot apply for assignments. Please use the admin panel to manage assignments.');
-    }
-    
     // Find or create tutor session
     let tutor = await Tutor.findOne({ chatId: chatId });
     if (!tutor) {
@@ -1113,7 +1217,6 @@ module.exports = {
   handlePostAssignmentCommand,
   handleAssignmentDetails,
   handleViewApplicationsCommand,
-  canUserApply,
   handleAssignmentApplication,
   handleApplicationDecision,
   toggleAssignmentStatus,
