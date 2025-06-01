@@ -1098,6 +1098,8 @@ async function adminViewAllApplications(bot, chatId, Assignment) {
     await safeSend(bot, chatId, '❌ An error occurred while loading applications. Please try again.');
   }
 }
+// Full version of handleCallbackQuery with all editable fields handled
+// Full version of handleCallbackQuery with all editable fields and menus handled
 async function handleCallbackQuery(
   bot,
   chatId,
@@ -1111,12 +1113,12 @@ async function handleCallbackQuery(
   BOT_USERNAME
 ) {
   try {
-    // View main menu
+    console.log("📥 Callback data received:", data);
+
     if (data === 'main_menu') {
       return await showMainMenu(chatId, bot, userId, ADMIN_USERS);
     }
 
-    // Admin panel access
     if (data === 'admin_panel') {
       if (!isAdmin(userId, ADMIN_USERS)) {
         return await safeSend(bot, chatId, 'You are not authorized to access the admin panel.');
@@ -1124,12 +1126,10 @@ async function handleCallbackQuery(
       return await showAdminPanel(chatId, bot);
     }
 
-    console.log("Callback data received:", JSON.stringify(data));
     if (data.trim() === 'admin_post_assignment') {
       return await startAssignmentCreation(bot, chatId, userSessions);
     }
 
-    // View assignments (pagination supported)
     if (data === 'view_assignments') {
       return await viewAssignments(bot, chatId, 0, Assignment);
     }
@@ -1139,56 +1139,43 @@ async function handleCallbackQuery(
       return await viewAssignments(bot, chatId, page, Assignment);
     }
 
-    // View tutor's own applications
     if (data === 'view_applications') {
       return await viewMyApplications(bot, chatId, userSessions, Assignment);
     }
 
-    // Admin: View all applications
     if (data === 'admin_view_all_applications') {
       return await adminViewAllApplications(bot, chatId, Assignment);
     }
 
-    // Admin: Manage assignments
     if (data === 'admin_manage_assignments') {
       return await adminManageAssignments(bot, chatId, Assignment);
     }
 
-    // Apply for assignment
     if (data.startsWith('apply_')) {
       const assignmentId = data.replace('apply_', '');
       return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
     }
 
-    // Profile editing
     if (data === 'profile_edit') {
       let tutor;
-    
-      // First try via tutorId stored in session (after sharing contact)
       if (userSessions[chatId]?.tutorId) {
         tutor = await Tutor.findById(userSessions[chatId].tutorId);
       }
-    
-      // Fallback: try to get contactNumber from session and find by variations
       if (!tutor && userSessions[chatId]?.contactNumber) {
         const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
         tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
       }
-    
       if (!tutor) {
-        console.warn(`⚠️ Profile not found for chatId=${chatId}`);
         return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
       }
-    
+
       const profileMsg = formatTutorProfile(tutor);
       return await safeSend(bot, chatId, `${profileMsg}\n\nWhat would you like to edit?`, {
         parse_mode: 'Markdown',
         reply_markup: getMainEditProfileMenu(tutor)
       });
     }
-    
 
-    // Personal info menu
     if (data === 'edit_personal_info') {
       const tutor = await Tutor.findOne({ userId });
       return await safeSend(bot, chatId, 'Edit Personal Information:', {
@@ -1196,7 +1183,177 @@ async function handleCallbackQuery(
       });
     }
 
-    // Fallback
+    if (data.startsWith('edit_')) {
+      const field = data.replace('edit_', '');
+      const editableFields = ['fullName', 'email', 'dob', 'age', 'nationality', 'nationalityOther', 'nricLast4', 'tutorType', 'yearsOfExperience', 'currentSchool', 'previousSchools', 'introduction', 'teachingExperience', 'trackRecord', 'sellingPoints'];
+      if (editableFields.includes(field)) {
+        userSessions[chatId] = {
+          ...userSessions[chatId],
+          state: `awaiting_${field}`,
+          userId
+        };
+        return await safeSend(bot, chatId, `✏️ Please enter your ${field.replace(/([A-Z])/g, ' $1')}:`);
+      }
+    }
+
+    if (data === 'edit_gender_menu') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Select your gender:', {
+        reply_markup: getGenderMenu()
+      });
+    }
+
+    if (data.startsWith('set_gender_')) {
+      const gender = data.replace('set_gender_', '');
+      const tutor = await Tutor.findOne({ userId });
+      tutor.gender = gender.charAt(0).toUpperCase() + gender.slice(1);
+      await tutor.save();
+      return await safeSend(bot, chatId, `✅ Gender updated to *${tutor.gender}*`, {
+        parse_mode: 'Markdown',
+        reply_markup: getPersonalInfoMenu(tutor)
+      });
+    }
+
+    if (data === 'edit_race_menu') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Select your race:', {
+        reply_markup: getRaceMenu()
+      });
+    }
+
+    if (data.startsWith('set_race_')) {
+      const race = data.replace('set_race_', '');
+      const tutor = await Tutor.findOne({ userId });
+      tutor.race = race.charAt(0).toUpperCase() + race.slice(1);
+      await tutor.save();
+      return await safeSend(bot, chatId, `✅ Race updated to *${tutor.race}*`, {
+        parse_mode: 'Markdown',
+        reply_markup: getPersonalInfoMenu(tutor)
+      });
+    }
+
+    if (data === 'edit_education_menu') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Select your highest education level:', {
+        reply_markup: getEducationMenu()
+      });
+    }
+
+    if (data.startsWith('set_education_')) {
+      const edu = data.replace('set_education_', '');
+      const tutor = await Tutor.findOne({ userId });
+      tutor.highestEducation = edu.charAt(0).toUpperCase() + edu.slice(1);
+      await tutor.save();
+      return await safeSend(bot, chatId, `✅ Education updated to *${tutor.highestEducation}*`, {
+        parse_mode: 'Markdown',
+        reply_markup: getPersonalInfoMenu(tutor)
+      });
+    }
+
+    if (data === 'edit_teaching_levels') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Select teaching levels:', {
+        reply_markup: getTeachingLevelsMenu(tutor)
+      });
+    }
+
+    if (data === 'edit_locations') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Update your preferred teaching locations:', {
+        reply_markup: getLocationsMenu(tutor)
+      });
+    }
+
+    if (data.startsWith('toggle_location_')) {
+      const key = data.replace('toggle_location_', '');
+      const tutor = await Tutor.findOne({ userId });
+      tutor.locations[key] = !tutor.locations[key];
+      await tutor.save();
+      return await safeSend(bot, chatId, '✅ Location updated.', {
+        reply_markup: getLocationsMenu(tutor)
+      });
+    }
+
+    if (data === 'edit_availability') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Update your available time slots:', {
+        reply_markup: getAvailabilityMenu(tutor)
+      });
+    }
+
+    if (data.startsWith('toggle_availability_')) {
+      const key = data.replace('toggle_availability_', '');
+      const tutor = await Tutor.findOne({ userId });
+      tutor.availableTimeSlots[key] = !tutor.availableTimeSlots[key];
+      await tutor.save();
+      return await safeSend(bot, chatId, '✅ Availability updated.', {
+        reply_markup: getAvailabilityMenu(tutor)
+      });
+    }
+
+    if (data === 'edit_hourly_rates') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Update your hourly rates:', {
+        reply_markup: getHourlyRatesMenu(tutor)
+      });
+    }
+
+    if (data.startsWith('edit_rate_')) {
+      const key = data.replace('edit_rate_', '');
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: `awaiting_rate_${key}`,
+        userId
+      };
+      return await safeSend(bot, chatId, `💰 Please enter your new hourly rate for ${key.charAt(0).toUpperCase() + key.slice(1)} level:`);
+    }
+
+    if (data === 'edit_primary_subjects') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Update Primary level subjects:', {
+        reply_markup: getPrimarySubjectsMenu(tutor)
+      });
+    }
+    if (data === 'edit_secondary_subjects') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Update Secondary level subjects:', {
+        reply_markup: getSecondarySubjectsMenu(tutor)
+      });
+    }
+    if (data === 'edit_jc_subjects') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Update JC level subjects:', {
+        reply_markup: getJCSubjectsMenu(tutor)
+      });
+    }
+    if (data === 'edit_international_subjects') {
+      const tutor = await Tutor.findOne({ userId });
+      return await safeSend(bot, chatId, 'Update International level subjects:', {
+        reply_markup: getInternationalSubjectsMenu(tutor)
+      });
+    }
+
+    const toggleCategories = ['primary', 'secondary', 'jc', 'international'];
+    for (const cat of toggleCategories) {
+      if (data.startsWith(`toggle_${cat}_`)) {
+        const key = data.replace(`toggle_${cat}_`, '');
+        const tutor = await Tutor.findOne({ userId });
+        tutor.teachingLevels[cat][key] = !tutor.teachingLevels[cat][key];
+        await tutor.save();
+
+        const menuFn = {
+          primary: getPrimarySubjectsMenu,
+          secondary: getSecondarySubjectsMenu,
+          jc: getJCSubjectsMenu,
+          international: getInternationalSubjectsMenu
+        }[cat];
+
+        return await safeSend(bot, chatId, `✅ ${cat} subject updated.`, {
+          reply_markup: menuFn(tutor)
+        });
+      }
+    }
+
     return await safeSend(bot, chatId, '❓ This action is not yet implemented.');
   } catch (error) {
     console.error('❌ Error in handleCallbackQuery:', error);
@@ -1214,7 +1371,12 @@ async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignme
       const startParam = text.split(' ')[1];
       return await handleStart(bot, chatId, userId, Tutor, userSessions, startParam);
     }
-
+    
+    if (text.startsWith('/start apply_')) {
+      const assignmentId = text.split('_')[1];
+      return await handleApplication(bot, chatId, fromId, assignmentId, Assignment, Tutor, userSessions);
+    }
+    
     const session = userSessions[chatId];
 
     if (session?.state === 'creating_assignment') {
