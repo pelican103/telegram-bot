@@ -17,7 +17,6 @@ const tutorSchema = new mongoose.Schema({
   nationalityOther: String,
   race: String,
   nricLast4: String,
-  telegramChatId: { type: Number }, // Added field to store Telegram Chat ID
   
   // Tutoring Preferences
   teachingLevels: {
