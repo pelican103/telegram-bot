@@ -1,5 +1,3 @@
-import Tutor from '../models/Tutor.js';
-
 function normalizePhone(phone) {
   const cleaned = phone.replace(/\D/g, '');
   const variations = [
