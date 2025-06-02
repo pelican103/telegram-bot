@@ -553,44 +553,24 @@ function isAdmin(userId, ADMIN_USERS) {
 // Handle initial start and contact sharing
 async function handleStart(bot, chatId, userId, Tutor, userSessions, startParam = null, Assignment, ADMIN_USERS, BOT_USERNAME) {
   try {
-    // Check if tutor exists in database
-    let tutor = await Tutor.findOne({ userId: userId });
+    // Always request contact number first - this is your primary verification method
+    await safeSend(bot, chatId, '👋 Welcome! To get started, please share your contact number by clicking the button below.', {
+      reply_markup: {
+        keyboard: [[{
+          text: '📞 Share Contact Number',
+          request_contact: true
+        }]],
+        one_time_keyboard: true,
+        resize_keyboard: true
+      }
+    });
     
-    if (!tutor) {
-      // New user - request contact number
-      await safeSend(bot, chatId, '👋 Welcome! To get started, please share your contact number by clicking the button below.', {
-        reply_markup: {
-          keyboard: [[{
-            text: '📞 Share Contact Number',
-            request_contact: true
-          }]],
-          one_time_keyboard: true,
-          resize_keyboard: true
-        }
-      });
-      
-      // Set state to waiting for contact
-      userSessions[chatId] = { 
-        state: 'awaiting_contact',
-        startParam: startParam 
-      };
-      return;
-    }
-    
-    // Existing user - set up session
-    userSessions[chatId] = { tutorId: tutor._id, contactNumber: phoneNumber};
-    
-    if (startParam) {
-      await handleStartParameter(bot, chatId, userId, startParam, Assignment, Tutor, userSessions, ADMIN_USERS);
-      return;
-    }
-    
-    // Show welcome message with profile info
-    const profileMsg = formatTutorProfile(tutor);
-    await safeSend(bot, chatId, `Welcome back!\n\n${profileMsg}`, { parse_mode: 'Markdown' });
-    
-    // Show main menu
-    await showMainMenu(chatId, bot, userId, ADMIN_USERS);
+    // Set state to waiting for contact
+    userSessions[chatId] = { 
+      state: 'awaiting_contact',
+      startParam: startParam,
+      userId: userId // Store for later use
+    };
     
   } catch (error) {
     console.error('Error handling start:', error);
@@ -602,28 +582,27 @@ async function handleStart(bot, chatId, userId, Tutor, userSessions, startParam 
 async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, ADMIN_USERS) {
   try {
     const phoneNumber = contact.phone_number;
-    const phoneVariations = normalizePhone(phoneNumber);
+    
+    // Extract last 8 digits for Singapore numbers
+    const last8Digits = phoneNumber.replace(/\D/g, '').slice(-8);
+    
+    // Create variations to search for
+    const phoneVariations = [
+      last8Digits,
+      `+65${last8Digits}`,
+      `65${last8Digits}`,
+      phoneNumber
+    ];
+    
+    console.log('🔍 Searching for phone variations:', phoneVariations);
     
     // Find existing tutor by phone number variations
     let tutor = await Tutor.findOne({
       contactNumber: { $in: phoneVariations }
     });
     
-    if (!tutor) {
-      // Create new tutor
-      tutor = new Tutor({
-        userId: userId,
-        chatId: chatId,
-        contactNumber: phoneNumber,
-        fullName: contact.first_name + (contact.last_name ? ' ' + contact.last_name : '')
-      });
-      await tutor.save();
-      
-      await safeSend(bot, chatId, 'Account created successfully! Please complete your profile to start applying for assignments.', {
-        reply_markup: { remove_keyboard: true }
-      });
-    } else {
-      // Update existing tutor with new chatId and userId
+    if (tutor) {
+      // ✅ VERIFIED USER - Update their Telegram info
       tutor.chatId = chatId;
       tutor.userId = userId;
       if (!tutor.fullName && contact.first_name) {
@@ -631,13 +610,28 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
       }
       await tutor.save();
       
-      await safeSend(bot, chatId, 'Welcome back! Your profile has been linked.', {
+      await safeSend(bot, chatId, '✅ Welcome back! Your account has been verified and linked.', {
         reply_markup: { remove_keyboard: true }
       });
+      
+      console.log('✅ Verified user:', tutor.fullName || tutor.contactNumber);
+      
+    } else {
+      // ❌ UNVERIFIED USER - Phone not in database
+      await safeSend(bot, chatId, '❌ Sorry, your phone number is not registered in our system. Please contact admin for access.', {
+        reply_markup: { remove_keyboard: true }
+      });
+      
+      console.log('❌ Unverified phone number:', last8Digits);
+      return; // Stop here - don't create account
     }
     
     // Set up session
-    userSessions[chatId] = { tutorId: tutor._id, contactNumber: phoneNumber };
+    userSessions[chatId] = { 
+      tutorId: tutor._id, 
+      contactNumber: tutor.contactNumber,
+      verified: true
+    };
     
     // Handle start parameter if exists
     const startParam = userSessions[chatId].startParam;
@@ -654,7 +648,7 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
     
   } catch (error) {
     console.error('Error handling contact:', error);
-    await safeSend(bot, chatId, 'There was an error setting up your account. Please try again.');
+    await safeSend(bot, chatId, 'There was an error verifying your account. Please try again.');
   }
 }
 

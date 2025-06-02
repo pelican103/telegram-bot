@@ -17,6 +17,8 @@ const tutorSchema = new mongoose.Schema({
   nationalityOther: String,
   race: String,
   nricLast4: String,
+  userId: Number,   
+  chatId: Number, 
   
   // Tutoring Preferences
   teachingLevels: {
