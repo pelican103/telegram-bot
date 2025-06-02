@@ -1,3 +1,5 @@
+import Tutor from '../models/Tutor.js';
+
 function normalizePhone(phone) {
   const cleaned = phone.replace(/\D/g, '');
   const variations = [
@@ -160,6 +162,7 @@ function initializeLocations(tutor) {
 function getTick(value) {
   return value ? '✅' : '❌';
 }
+const getToggleEmoji = (value) => value ? '✅' : '❌';
 
 // Format functions
 function formatTutorProfile(tutor) {
@@ -263,16 +266,32 @@ function getMainEditProfileMenu(tutor) {
 function getPersonalInfoMenu(tutor) {
   return {
     inline_keyboard: [
-      [{ text: '👤 Full Name', callback_data: 'edit_fullName' }],
-      [{ text: '📧 Email', callback_data: 'edit_email' }],
-      [{ text: '⚥ Gender', callback_data: 'edit_gender_menu' }],
-      [{ text: '🌍 Race', callback_data: 'edit_race_menu' }],
-      [{ text: '🎓 Education', callback_data: 'edit_education_menu' }],
-      [{ text: '🔙 Back to Profile Edit', callback_data: 'profile_edit' }]
+      [{ text: `👤 Full Name: ${tutor.fullName || 'Not set'}`, callback_data: 'edit_full_name' }],
+      [{ text: `📧 Email: ${tutor.email || 'Not set'}`, callback_data: 'edit_email' }],
+      [{ text: `🎂 Age: ${tutor.age || 'Not set'}`, callback_data: 'edit_age' }],
+      [{ text: `📅 Date of Birth`, callback_data: 'edit_dob' }],
+      [{ text: `👥 Gender: ${tutor.gender || 'Not set'}`, callback_data: 'edit_gender_menu' }],
+      [{ text: `🌍 Nationality: ${tutor.nationality || tutor.nationalityOther || 'Not set'}`, callback_data: 'edit_nationality' }],
+      [{ text: `🏃‍♂️ Race: ${tutor.race || 'Not set'}`, callback_data: 'edit_race_menu' }],
+      [{ text: `🆔 NRIC (Last 4): ${tutor.nricLast4 || 'Not set'}`, callback_data: 'edit_nric' }],
+      [{ text: '🎓 Education & Experience', callback_data: 'edit_education_experience' }],
+      [{ text: '⬅️ Back to Profile Edit', callback_data: 'profile_edit' }]
     ]
   };
 }
 
+function getEducationExperienceMenu(tutor) {
+  return {
+    inline_keyboard: [
+      [{ text: `🎓 Highest Education: ${tutor.highestEducation || 'Not set'}`, callback_data: 'edit_education_menu' }],
+      [{ text: `👨‍🏫 Tutor Type: ${tutor.tutorType || 'Not set'}`, callback_data: 'edit_tutor_type' }],
+      [{ text: `📚 Years of Experience: ${tutor.yearsOfExperience || 'Not set'}`, callback_data: 'edit_years_experience' }],
+      [{ text: `🏫 Current School: ${tutor.currentSchool || 'Not set'}`, callback_data: 'edit_current_school' }],
+      [{ text: `🏫 Previous Schools: ${tutor.previousSchools || 'Not set'}`, callback_data: 'edit_previous_schools' }],
+      [{ text: '⬅️ Back to Personal Info', callback_data: 'edit_personal_info' }]
+    ]
+  };
+}
 function getTeachingLevelsMenu(tutor) {
   initializeTeachingLevels(tutor);
   
@@ -291,7 +310,17 @@ function getTeachingLevelsMenu(tutor) {
     ]
   };
 }
-
+function getProfileDetailsMenu(tutor) {
+  return {
+    inline_keyboard: [
+      [{ text: '📝 Introduction', callback_data: 'edit_introduction' }],
+      [{ text: '👨‍🏫 Teaching Experience', callback_data: 'edit_teaching_experience' }],
+      [{ text: '🏆 Track Record', callback_data: 'edit_track_record' }],
+      [{ text: '⭐ Selling Points', callback_data: 'edit_selling_points' }],
+      [{ text: '⬅️ Back to Profile Edit', callback_data: 'profile_edit' }]
+    ]
+  };
+}
 function getLocationsMenu(tutor) {
   initializeLocations(tutor);
   
@@ -1098,7 +1127,7 @@ async function adminViewAllApplications(bot, chatId, Assignment) {
     await safeSend(bot, chatId, '❌ An error occurred while loading applications. Please try again.');
   }
 }
-// Full version of handleCallbackQuery with all editable fields and menus handled
+// Fixed version of handleCallbackQuery with all editable fields and menus handled
 async function handleCallbackQuery(
   bot,
   chatId,
@@ -1114,6 +1143,20 @@ async function handleCallbackQuery(
   try {
     console.log("📥 Callback data received:", data);
 
+    // Helper function to get tutor from session
+    const getTutorFromSession = async (chatId) => {
+      let tutor;
+      if (userSessions[chatId]?.tutorId) {
+        tutor = await Tutor.findById(userSessions[chatId].tutorId);
+      }
+      if (!tutor && userSessions[chatId]?.contactNumber) {
+        const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
+        tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
+      }
+      return tutor;
+    };
+
+    // Main menu and admin handlers
     if (data === 'main_menu') {
       return await showMainMenu(chatId, bot, userId, ADMIN_USERS);
     }
@@ -1155,339 +1198,205 @@ async function handleCallbackQuery(
       return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
     }
 
+    // Profile editing handlers
     if (data === 'profile_edit') {
-      let tutor;
-      if (userSessions[chatId]?.tutorId) {
-        tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      }
-      if (!tutor && userSessions[chatId]?.contactNumber) {
-        const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-        tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-      }
+      const tutor = await getTutorFromSession(chatId);
       if (!tutor) {
-        return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
-
+    
       const profileMsg = formatTutorProfile(tutor);
       return await safeSend(bot, chatId, `${profileMsg}\n\nWhat would you like to edit?`, {
         parse_mode: 'Markdown',
         reply_markup: getMainEditProfileMenu(tutor)
       });
     }
-
+    
     if (data === 'edit_personal_info') {
-      if (data === 'edit_personal_info') {
-              let tutor;
-        if (userSessions[chatId]?.tutorId) {
-          tutor = await Tutor.findById(userSessions[chatId].tutorId);
-        }
-        if (!tutor && userSessions[chatId]?.contactNumber) {
-          const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-          tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-        }
-        if (!tutor) {
-          return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-        }
-
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }
-
-    if (data.startsWith('edit_')) {
-      const field = data.replace('edit_', '');
-      const editableFields = ['fullName', 'email', 'dob', 'age', 'nationality', 'nationalityOther', 'nricLast4', 'tutorType', 'yearsOfExperience', 'currentSchool', 'previousSchools', 'introduction', 'teachingExperience', 'trackRecord', 'sellingPoints'];
-      if (editableFields.includes(field)) {
-        userSessions[chatId] = {
-          ...userSessions[chatId],
-          state: `awaiting_${field}`,
-          userId
-        };
-        return await safeSend(bot, chatId, `✏️ Please enter your ${field.replace(/([A-Z])/g, ' $1')}:`);
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
-    }
-
-    if (data === 'edit_gender_menu') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
-
+    
       return await safeSend(bot, chatId, 'Edit Personal Information:', {
         reply_markup: getPersonalInfoMenu(tutor)
       });
-    }      return await safeSend(bot, chatId, 'Select your gender:', {
+    }
+    if (data === 'edit_full_name') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_full_name',
+        userId
+      };
+      return await safeSend(bot, chatId, '👤 Please enter your full name:');
+    }
+    
+    if (data === 'edit_contact_number') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_contact_number',
+        userId
+      };
+      return await safeSend(bot, chatId, '📱 Please enter your contact number:');
+    }
+    // Gender editing
+    if (data === 'edit_gender_menu') {
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+    
+      return await safeSend(bot, chatId, 'Select your gender:', {
         reply_markup: getGenderMenu()
       });
     }
-
+    
     if (data.startsWith('set_gender_')) {
       const gender = data.replace('set_gender_', '');
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
-
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      tutor.gender = gender.charAt(0).toUpperCase() + gender.slice(1);
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+    
+      tutor.gender = gender.charAt(0).toUpperCase() + gender.slice(1);
       await tutor.save();
+    
       return await safeSend(bot, chatId, `✅ Gender updated to *${tutor.gender}*`, {
         parse_mode: 'Markdown',
         reply_markup: getPersonalInfoMenu(tutor)
       });
     }
-
+    
+    // Race editing
     if (data === 'edit_race_menu') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
-
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Select your race:', {
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+    
+      return await safeSend(bot, chatId, 'Select your race:', {
         reply_markup: getRaceMenu()
       });
     }
-
+    
     if (data.startsWith('set_race_')) {
       const race = data.replace('set_race_', '');
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
-
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      tutor.race = race.charAt(0).toUpperCase() + race.slice(1);
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+    
+      tutor.race = race.charAt(0).toUpperCase() + race.slice(1);
       await tutor.save();
+    
       return await safeSend(bot, chatId, `✅ Race updated to *${tutor.race}*`, {
         parse_mode: 'Markdown',
         reply_markup: getPersonalInfoMenu(tutor)
       });
     }
 
+    // Education editing
     if (data === 'edit_education_menu') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Select your highest education level:', {
+      return await safeSend(bot, chatId, 'Select your highest education level:', {
         reply_markup: getEducationMenu()
       });
     }
 
     if (data.startsWith('set_education_')) {
       const edu = data.replace('set_education_', '');
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      tutor.highestEducation = edu.charAt(0).toUpperCase() + edu.slice(1);
+      tutor.highestEducation = edu.charAt(0).toUpperCase() + edu.slice(1);
       await tutor.save();
+      
       return await safeSend(bot, chatId, `✅ Education updated to *${tutor.highestEducation}*`, {
         parse_mode: 'Markdown',
         reply_markup: getPersonalInfoMenu(tutor)
       });
     }
 
+    // Teaching levels editing
     if (data === 'edit_teaching_levels') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Select teaching levels:', {
+      return await safeSend(bot, chatId, 'Select teaching levels:', {
         reply_markup: getTeachingLevelsMenu(tutor)
       });
     }
 
+    // Locations editing
     if (data === 'edit_locations') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Update your preferred teaching locations:', {
+      return await safeSend(bot, chatId, 'Update your preferred teaching locations:', {
         reply_markup: getLocationsMenu(tutor)
       });
     }
 
     if (data.startsWith('toggle_location_')) {
       const key = data.replace('toggle_location_', '');
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      tutor.locations[key] = !tutor.locations[key];
+      tutor.locations[key] = !tutor.locations[key];
       await tutor.save();
+      
       return await safeSend(bot, chatId, '✅ Location updated.', {
         reply_markup: getLocationsMenu(tutor)
       });
     }
 
+    // Availability editing
     if (data === 'edit_availability') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Update your available time slots:', {
+      return await safeSend(bot, chatId, 'Update your available time slots:', {
         reply_markup: getAvailabilityMenu(tutor)
       });
     }
 
     if (data.startsWith('toggle_availability_')) {
       const key = data.replace('toggle_availability_', '');
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      tutor.availableTimeSlots[key] = !tutor.availableTimeSlots[key];
+      tutor.availableTimeSlots[key] = !tutor.availableTimeSlots[key];
       await tutor.save();
+      
       return await safeSend(bot, chatId, '✅ Availability updated.', {
         reply_markup: getAvailabilityMenu(tutor)
       });
     }
 
+    // Hourly rates editing
     if (data === 'edit_hourly_rates') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Update your hourly rates:', {
+      return await safeSend(bot, chatId, 'Update your hourly rates:', {
         reply_markup: getHourlyRatesMenu(tutor)
       });
     }
@@ -1502,112 +1411,310 @@ if (!tutor) {
       return await safeSend(bot, chatId, `💰 Please enter your new hourly rate for ${key.charAt(0).toUpperCase() + key.slice(1)} level:`);
     }
 
-    if (data === 'edit_primary_subjects') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+    // Additional personal info editing
+    if (data === 'edit_age') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_age',
+        userId
+      };
+      return await safeSend(bot, chatId, '👤 Please enter your age:');
+    }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
+    if (data === 'edit_nationality') {
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+
+      return await safeSend(bot, chatId, 'Select your nationality:', {
+        reply_markup: getNationalityMenu()
+      });
+    }
+
+    if (data.startsWith('set_nationality_')) {
+      const nationality = data.replace('set_nationality_', '');
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+
+      if (nationality === 'other') {
+        userSessions[chatId] = {
+          ...userSessions[chatId],
+          state: 'awaiting_nationality_other',
+          userId
+        };
+        return await safeSend(bot, chatId, '🌍 Please specify your nationality:');
+      } else {
+        tutor.nationality = nationality.charAt(0).toUpperCase() + nationality.slice(1);
+        tutor.nationalityOther = null; // Clear other field if selecting predefined
+        await tutor.save();
+
+        return await safeSend(bot, chatId, `✅ Nationality updated to *${tutor.nationality}*`, {
+          parse_mode: 'Markdown',
+          reply_markup: getPersonalInfoMenu(tutor)
+        });
+      }
+    }
+
+    if (data === 'edit_nric') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_nric',
+        userId
+      };
+      return await safeSend(bot, chatId, '🆔 Please enter the last 4 digits of your NRIC:');
+    }
+
+    if (data === 'edit_email') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_email',
+        userId
+      };
+      return await safeSend(bot, chatId, '📧 Please enter your email address:');
+    }
+
+    if (data === 'edit_dob') {
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+
+      return await safeSend(bot, chatId, 'Update your date of birth:', {
+        reply_markup: getDOBMenu(tutor)
+      });
+    }
+
+    if (data === 'edit_dob_day') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_dob_day',
+        userId
+      };
+      return await safeSend(bot, chatId, '📅 Please enter the day (1-31):');
+    }
+
+    if (data === 'edit_dob_month') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_dob_month',
+        userId
+      };
+      return await safeSend(bot, chatId, '📅 Please enter the month (1-12):');
+    }
+
+    if (data === 'edit_dob_year') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_dob_year',
+        userId
+      };
+      return await safeSend(bot, chatId, '📅 Please enter the year (e.g., 1995):');
+    }
+
+    if (data === 'edit_introduction') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_introduction',
+        userId
+      };
+      return await safeSend(bot, chatId, '📝 Please enter your introduction/bio:');
+    }
+
+    if (data === 'edit_teaching_experience') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_teaching_experience',
+        userId
+      };
+      return await safeSend(bot, chatId, '👨‍🏫 Please describe your teaching experience:');
+    }
+
+    if (data === 'edit_track_record') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_track_record',
+        userId
+      };
+      return await safeSend(bot, chatId, '🏆 Please describe your track record:');
+    }
+
+    if (data === 'edit_selling_points') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_selling_points',
+        userId
+      };
+      return await safeSend(bot, chatId, '⭐ Please enter your key selling points:');
+    }
+
+    if (data === 'edit_years_experience') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_years_experience',
+        userId
+      };
+      return await safeSend(bot, chatId, '📚 Please enter your years of tutoring experience:');
+    }
+
+    if (data === 'edit_tutor_type') {
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+
+      return await safeSend(bot, chatId, 'Select your tutor type:', {
+        reply_markup: getTutorTypeMenu()
+      });
+    }
+
+    if (data.startsWith('set_tutor_type_')) {
+      const tutorType = data.replace('set_tutor_type_', '');
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+
+      tutor.tutorType = tutorType.charAt(0).toUpperCase() + tutorType.slice(1);
+      await tutor.save();
+
+      return await safeSend(bot, chatId, `✅ Tutor type updated to *${tutor.tutorType}*`, {
+        parse_mode: 'Markdown',
         reply_markup: getPersonalInfoMenu(tutor)
       });
-    }      return await safeSend(bot, chatId, 'Update Primary level subjects:', {
+    }
+
+    if (data === 'edit_current_school') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_current_school',
+        userId
+      };
+      return await safeSend(bot, chatId, '🏫 Please enter your current school:');
+    }
+
+    if (data === 'edit_previous_schools') {
+      userSessions[chatId] = {
+        ...userSessions[chatId],
+        state: 'awaiting_previous_schools',
+        userId
+      };
+      return await safeSend(bot, chatId, '🏫 Please enter your previous schools:');
+    }
+
+    // Teaching levels with proper toggle display
+    if (data === 'edit_teaching_levels_detailed') {
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+
+      return await safeSend(bot, chatId, 'Select which teaching levels you want to configure:', {
+        reply_markup: getTeachingLevelsDetailedMenu(tutor)
+      });
+    }
+
+    if (data.startsWith('toggle_level_')) {
+      const level = data.replace('toggle_level_', '');
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+
+      // Initialize the level object if it doesn't exist
+      if (!tutor.teachingLevels[level]) {
+        tutor.teachingLevels[level] = {};
+      }
+
+      // Toggle the level - this would enable/disable the entire level
+      const hasAnySubject = Object.values(tutor.teachingLevels[level]).some(val => val === true);
+      
+      // If any subject is enabled, disable all. If none enabled, enable common ones
+      if (hasAnySubject) {
+        Object.keys(tutor.teachingLevels[level]).forEach(subject => {
+          tutor.teachingLevels[level][subject] = false;
+        });
+      } else {
+        // Enable common subjects based on level
+        const commonSubjects = {
+          primary: ['english', 'math'],
+          secondary: ['english', 'math'],
+          jc: ['generalPaper', 'h2Math'],
+          international: ['ib']
+        };
+        
+        commonSubjects[level]?.forEach(subject => {
+          if (tutor.teachingLevels[level].hasOwnProperty(subject)) {
+            tutor.teachingLevels[level][subject] = true;
+          }
+        });
+      }
+
+      await tutor.save();
+      
+      return await safeSend(bot, chatId, `✅ ${level.charAt(0).toUpperCase() + level.slice(1)} level updated.`, {
+        reply_markup: getTeachingLevelsDetailedMenu(tutor)
+      });
+    }
+
+    // Subject editing handlers
+    if (data === 'edit_primary_subjects') {
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
+
+      return await safeSend(bot, chatId, 'Update Primary level subjects:', {
         reply_markup: getPrimarySubjectsMenu(tutor)
       });
     }
+    
     if (data === 'edit_secondary_subjects') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Update Secondary level subjects:', {
+      return await safeSend(bot, chatId, 'Update Secondary level subjects:', {
         reply_markup: getSecondarySubjectsMenu(tutor)
       });
     }
+    
     if (data === 'edit_jc_subjects') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Update JC level subjects:', {
+      return await safeSend(bot, chatId, 'Update JC level subjects:', {
         reply_markup: getJCSubjectsMenu(tutor)
       });
     }
+    
     if (data === 'edit_international_subjects') {
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+      const tutor = await getTutorFromSession(chatId);
+      if (!tutor) {
+        return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+      }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      return await safeSend(bot, chatId, 'Update International level subjects:', {
+      return await safeSend(bot, chatId, 'Update International level subjects:', {
         reply_markup: getInternationalSubjectsMenu(tutor)
       });
     }
 
+    // Subject toggle handlers
     const toggleCategories = ['primary', 'secondary', 'jc', 'international'];
     for (const cat of toggleCategories) {
       if (data.startsWith(`toggle_${cat}_`)) {
         const key = data.replace(`toggle_${cat}_`, '');
-        if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
+        const tutor = await getTutorFromSession(chatId);
+        if (!tutor) {
+          return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
+        }
 
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }        tutor.teachingLevels[cat][key] = !tutor.teachingLevels[cat][key];
+        tutor.teachingLevels[cat][key] = !tutor.teachingLevels[cat][key];
         await tutor.save();
 
         const menuFn = {
@@ -1617,75 +1724,107 @@ if (!tutor) {
           international: getInternationalSubjectsMenu
         }[cat];
 
-        return await safeSend(bot, chatId, `✅ ${cat} subject updated.`, {
+        return await safeSend(bot, chatId, `✅ ${cat.charAt(0).toUpperCase() + cat.slice(1)} subject updated.`, {
           reply_markup: menuFn(tutor)
         });
       }
     }
 
+    // Default handler for unimplemented actions
     return await safeSend(bot, chatId, '❓ This action is not yet implemented.');
+    
   } catch (error) {
     console.error('❌ Error in handleCallbackQuery:', error);
     return await safeSend(bot, chatId, 'An error occurred. Please try again.');
   }
 }
 
-async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignment, userSessions, ADMIN_USERS) {
-  try {
-    if (message.contact) {
-      return await handleContact(bot, chatId, userId, message.contact, Tutor, userSessions, ADMIN_USERS);
-    }
-
-    if (text?.startsWith('/start')) {
-      const startParam = text.split(' ')[1];
-      return await handleStart(bot, chatId, userId, Tutor, userSessions, startParam, Assignment, ADMIN_USERS, BOT_USERNAME);
-    }
-    
-    if (text.startsWith('/start apply_')) {
-      const assignmentId = text.split('_')[1];
-      return await handleApplication(bot, chatId, fromId, assignmentId, Assignment, Tutor, userSessions);
-    }
-    
-    const session = userSessions[chatId];
-
-    if (session?.state === 'creating_assignment') {
-      return await handleAssignmentStep(bot, chatId, text, userSessions);
-    }
-
-    if (session?.state?.startsWith('awaiting_')) {
-      const field = session.state.replace('awaiting_', '');
-      if (data === 'edit_personal_info') {
-      let tutor;
-if (userSessions[chatId]?.tutorId) {
-  tutor = await Tutor.findById(userSessions[chatId].tutorId);
-}
-if (!tutor && userSessions[chatId]?.contactNumber) {
-  const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-  tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-}
-if (!tutor) {
-  return await safeSend(bot, chatId, '❌ We couldn’t find your profile. Please type /start and share your contact number again.');
-}
-
-      return await safeSend(bot, chatId, 'Edit Personal Information:', {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }      if (!tutor) return await safeSend(bot, chatId, 'Profile not found.');
-      tutor[field] = text.trim();
-      await tutor.save();
-      delete session.state;
-      delete session.userId;
-      return await safeSend(bot, chatId, `✅ ${field} updated successfully!`, {
-        reply_markup: getPersonalInfoMenu(tutor)
-      });
-    }
-
-    return await safeSend(bot, chatId, 'Please use the menu buttons or type /start to begin.');
-  } catch (err) {
-    console.error('❌ Message error:', err);
-    return await safeSend(bot, chatId, 'There was an error. Please try again.');
+export async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignment, userSessions, ADMIN_USERS) {
+  // Initialize session
+  if (!userSessions[userId]) {
+    userSessions[userId] = { state: 'idle' };
   }
+
+  const session = userSessions[userId];
+  const isAdmin = ADMIN_USERS.includes(userId.toString());
+
+  if (text === '/start') {
+    await bot.sendMessage(chatId, 'Welcome! Use the menu or type a command.');
+    session.state = 'idle';
+    return;
+  }
+
+  if (isAdmin && text === '/newassignment') {
+    session.state = 'awaiting_assignment_title';
+    session.assignmentDraft = {};
+    return await bot.sendMessage(chatId, 'Please enter the assignment title:');
+  }
+
+  if (isAdmin && session.state === 'awaiting_assignment_title') {
+    session.assignmentDraft.title = text;
+    session.state = 'awaiting_assignment_subject';
+    return await bot.sendMessage(chatId, 'Enter the subject:');
+  }
+
+  if (isAdmin && session.state === 'awaiting_assignment_subject') {
+    session.assignmentDraft.subject = text;
+    session.state = 'awaiting_assignment_level';
+    return await bot.sendMessage(chatId, 'Enter the level (e.g., Secondary 2):');
+  }
+
+  if (isAdmin && session.state === 'awaiting_assignment_level') {
+    session.assignmentDraft.level = text;
+    session.state = 'awaiting_assignment_description';
+    return await bot.sendMessage(chatId, 'Enter the description:');
+  }
+
+  if (isAdmin && session.state === 'awaiting_assignment_description') {
+    session.assignmentDraft.description = text;
+    session.state = 'awaiting_assignment_rate';
+    return await bot.sendMessage(chatId, 'Enter the rate (e.g., $40/hour):');
+  }
+
+  if (isAdmin && session.state === 'awaiting_assignment_rate') {
+    session.assignmentDraft.rate = text;
+    session.state = 'idle';
+
+    const assignment = new Assignment({
+      ...session.assignmentDraft,
+      frequency: 'Once a week',
+      startDate: new Date(),
+      location: 'Online',
+      duration: '1h',
+    });
+
+    await assignment.save();
+    await bot.sendMessage(chatId, `✅ Assignment created:\n\n${assignment.title}`);
+    return;
+  }
+
+  if (text.startsWith('/apply_')) {
+    const assignmentId = text.split('_')[1];
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) return await bot.sendMessage(chatId, '❌ Assignment not found.');
+
+    const alreadyApplied = assignment.applicants.some(app => app.tutorId.toString() === userId.toString());
+    if (alreadyApplied) return await bot.sendMessage(chatId, '⚠️ You have already applied.');
+
+    let tutor = await Tutor.findOne({ _id: userId });
+    if (!tutor) {
+      tutor = new Tutor({ _id: userId, fullName: 'Unknown' }); // Add better logic for real name
+      await tutor.save();
+    }
+
+    assignment.applicants.push({ tutorId: tutor._id });
+    await assignment.save();
+
+    await bot.sendMessage(chatId, '✅ Application submitted.');
+    return;
+  }
+
+  await bot.sendMessage(chatId, 'Sorry, I did not understand that. Please use the menu.');
 }
+
 
 
 // Admin manage assignments
