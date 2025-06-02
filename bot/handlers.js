@@ -160,7 +160,6 @@ function initializeLocations(tutor) {
 function getTick(value) {
   return value ? '✅' : '❌';
 }
-const getToggleEmoji = (value) => value ? '✅' : '❌';
 
 // Format functions
 function formatTutorProfile(tutor) {
@@ -1737,52 +1736,77 @@ async function handleCallbackQuery(
   }
 }
 
-async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignment, userSessions, ADMIN_USERS) {
-  // Initialize session
-  if (!userSessions[userId]) {
-    userSessions[userId] = { state: 'idle' };
+async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignment, userSessions, ADMIN_USERS, BOT_USERNAME) {
+  // Initialize session using chatId for consistency
+  if (!userSessions[chatId]) {
+    userSessions[chatId] = { state: 'idle' };
   }
 
-  const session = userSessions[userId];
-  const isAdmin = ADMIN_USERS.includes(userId.toString());
+  const session = userSessions[chatId];
+  const isUserAdmin = isAdmin(userId, ADMIN_USERS);
 
-  if (text === '/start') {
-    await bot.sendMessage(chatId, 'Welcome! Use the menu or type a command.');
-    session.state = 'idle';
-    return;
+  // Handle /start command - delegate to your existing handleStart function
+  if (text === '/start' || text.startsWith('/start ')) {
+    const startParam = text.includes(' ') ? text.split(' ')[1] : null;
+    return await handleStart(bot, chatId, userId, Tutor, userSessions, startParam, Assignment, ADMIN_USERS, BOT_USERNAME);
   }
 
-  if (isAdmin && text === '/newassignment') {
+  // Handle contact sharing - delegate to your existing handleContact function
+  if (message.contact) {
+    return await handleContact(bot, chatId, userId, message.contact, Tutor, userSessions, ADMIN_USERS);
+  }
+
+  // Check if user is in awaiting_contact state
+  if (session.state === 'awaiting_contact') {
+    return await safeSend(bot, chatId, '👋 Please share your contact number using the button below to continue.', {
+      reply_markup: {
+        keyboard: [[{
+          text: '📞 Share Contact Number',
+          request_contact: true
+        }]],
+        one_time_keyboard: true,
+        resize_keyboard: true
+      }
+    });
+  }
+
+  // For users without proper setup, redirect to start
+  if (!session.tutorId) {
+    return await handleStart(bot, chatId, userId, Tutor, userSessions, null, Assignment, ADMIN_USERS, BOT_USERNAME);
+  }
+
+  // Admin assignment creation flow
+  if (isUserAdmin && text === '/newassignment') {
     session.state = 'awaiting_assignment_title';
     session.assignmentDraft = {};
-    return await bot.sendMessage(chatId, 'Please enter the assignment title:');
+    return await safeSend(bot, chatId, 'Please enter the assignment title:');
   }
 
-  if (isAdmin && session.state === 'awaiting_assignment_title') {
+  if (isUserAdmin && session.state === 'awaiting_assignment_title') {
     session.assignmentDraft.title = text;
     session.state = 'awaiting_assignment_subject';
-    return await bot.sendMessage(chatId, 'Enter the subject:');
+    return await safeSend(bot, chatId, 'Enter the subject:');
   }
 
-  if (isAdmin && session.state === 'awaiting_assignment_subject') {
+  if (isUserAdmin && session.state === 'awaiting_assignment_subject') {
     session.assignmentDraft.subject = text;
     session.state = 'awaiting_assignment_level';
-    return await bot.sendMessage(chatId, 'Enter the level (e.g., Secondary 2):');
+    return await safeSend(bot, chatId, 'Enter the level (e.g., Secondary 2):');
   }
 
-  if (isAdmin && session.state === 'awaiting_assignment_level') {
+  if (isUserAdmin && session.state === 'awaiting_assignment_level') {
     session.assignmentDraft.level = text;
     session.state = 'awaiting_assignment_description';
-    return await bot.sendMessage(chatId, 'Enter the description:');
+    return await safeSend(bot, chatId, 'Enter the description:');
   }
 
-  if (isAdmin && session.state === 'awaiting_assignment_description') {
+  if (isUserAdmin && session.state === 'awaiting_assignment_description') {
     session.assignmentDraft.description = text;
     session.state = 'awaiting_assignment_rate';
-    return await bot.sendMessage(chatId, 'Enter the rate (e.g., $40/hour):');
+    return await safeSend(bot, chatId, 'Enter the rate (e.g., $40/hour):');
   }
 
-  if (isAdmin && session.state === 'awaiting_assignment_rate') {
+  if (isUserAdmin && session.state === 'awaiting_assignment_rate') {
     session.assignmentDraft.rate = text;
     session.state = 'idle';
 
@@ -1795,35 +1819,20 @@ async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignme
     });
 
     await assignment.save();
-    await bot.sendMessage(chatId, `✅ Assignment created:\n\n${assignment.title}`);
+    await safeSend(bot, chatId, `✅ Assignment created:\n\n${assignment.title}`);
     return;
   }
 
+  // Handle direct application commands (legacy support)
   if (text.startsWith('/apply_')) {
     const assignmentId = text.split('_')[1];
-    const assignment = await Assignment.findById(assignmentId);
-    if (!assignment) return await bot.sendMessage(chatId, '❌ Assignment not found.');
-
-    const alreadyApplied = assignment.applicants.some(app => app.tutorId.toString() === userId.toString());
-    if (alreadyApplied) return await bot.sendMessage(chatId, '⚠️ You have already applied.');
-
-    let tutor = await Tutor.findOne({ _id: userId });
-    if (!tutor) {
-      tutor = new Tutor({ _id: userId, fullName: 'Unknown' }); // Add better logic for real name
-      await tutor.save();
-    }
-
-    assignment.applicants.push({ tutorId: tutor._id });
-    await assignment.save();
-
-    await bot.sendMessage(chatId, '✅ Application submitted.');
-    return;
+    return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
   }
 
-  await bot.sendMessage(chatId, 'Sorry, I did not understand that. Please use the menu.');
+  // Default response - show main menu
+  await safeSend(bot, chatId, 'I didn\'t understand that command. Here\'s the main menu:');
+  return await showMainMenu(chatId, bot, userId, ADMIN_USERS);
 }
-
-
 
 // Admin manage assignments
 async function adminManageAssignments(bot, chatId, Assignment) {
