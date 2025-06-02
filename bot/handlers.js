@@ -8,117 +8,6 @@ function normalizePhone(phone) {
   return [...new Set(variations)];
 }
 
-function parseNaturalDate(dateString) {
-  const today = new Date();
-  const normalizedDate = dateString.toLowerCase().trim();
-  
-  // Handle "next monday", "next tuesday", etc.
-  const nextDayMatch = normalizedDate.match(/^next\s+(\w+)$/);
-  if (nextDayMatch) {
-    const dayName = nextDayMatch[1];
-    const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const targetDay = daysOfWeek.indexOf(dayName);
-    
-    if (targetDay !== -1) {
-      const currentDay = today.getDay();
-      let daysToAdd = targetDay - currentDay;
-      if (daysToAdd <= 0) daysToAdd += 7; // Next week
-      
-      const targetDate = new Date(today);
-      targetDate.setDate(today.getDate() + daysToAdd);
-      return targetDate;
-    }
-  }
-  
-  // Handle other natural language patterns
-  switch (normalizedDate) {
-    case 'today':
-      return new Date();
-    case 'tomorrow':
-      const tomorrow = new Date(today);
-      tomorrow.setDate(today.getDate() + 1);
-      return tomorrow;
-    case 'next week':
-      const nextWeek = new Date(today);
-      nextWeek.setDate(today.getDate() + 7);
-      return nextWeek;
-    default:
-      // Try to parse as regular date
-      const parsedDate = new Date(dateString);
-      if (isNaN(parsedDate.getTime())) {
-        throw new Error(`Unable to parse date: ${dateString}`);
-      }
-      return parsedDate;
-  }
-}
-
-function validateLevel(level) {
-  const validLevels = [
-    'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6',
-    'Secondary 1', 'Secondary 2', 'Secondary 3', 'Secondary 4', 'Secondary 5',
-    'JC 1', 'JC 2', 'Polytechnic', 'University', 'Adult Learning'
-  ];
-  
-  // Try to normalize the input
-  const normalizedLevel = level.trim();
-  
-  // Check for exact match
-  if (validLevels.includes(normalizedLevel)) {
-    return normalizedLevel;
-  }
-  
-  // Try to fix common variations
-  const levelMap = {
-    'primary 6': 'Primary 6',
-    'p6': 'Primary 6',
-    'sec 1': 'Secondary 1',
-    's1': 'Secondary 1',
-    'junior college 1': 'JC 1',
-    // Add more mappings as needed
-  };
-  
-  const mapped = levelMap[normalizedLevel.toLowerCase()];
-  if (mapped) {
-    return mapped;
-  }
-  
-  throw new Error(`Invalid level: ${level}. Valid options are: ${validLevels.join(', ')}`);
-}
-
-function validateFrequency(frequency) {
-  const validFrequencies = [
-    'Once a week', 'Twice a week', '3 times a week', 
-    '4 times a week', '5 times a week', 'Daily', 'Flexible'
-  ];
-  
-  // Try to normalize the input
-  const normalizedFreq = frequency.trim();
-  
-  // Check for exact match
-  if (validFrequencies.includes(normalizedFreq)) {
-    return normalizedFreq;
-  }
-  
-  // Try to fix common variations
-  const frequencyMap = {
-    '2 times per week': 'Twice a week',
-    '2 times a week': 'Twice a week',
-    'twice per week': 'Twice a week',
-    '1 time per week': 'Once a week',
-    'once per week': 'Once a week',
-    '3x per week': '3 times a week',
-    'thrice a week': '3 times a week',
-    // Add more mappings as needed
-  };
-  
-  const mapped = frequencyMap[normalizedFreq.toLowerCase()];
-  if (mapped) {
-    return mapped;
-  }
-  
-  throw new Error(`Invalid frequency: ${frequency}. Valid options are: ${validFrequencies.join(', ')}`);
-}
-
 function initializeTeachingLevels(tutor) {
   if (!tutor.teachingLevels) {
     tutor.teachingLevels = {
@@ -245,19 +134,111 @@ function formatAssignmentForChannel(assignment, botUsername) {
   
   return msg;
 }
+// Profile editing handlers
+async function handleNameEdit(bot, chatId, text, userSessions, Tutor) {
+  try {
+    const session = userSessions[chatId];
+    const tutor = await Tutor.findById(session.tutorId);
+    
+    tutor.fullName = text;
+    await tutor.save();
+    
+    session.state = 'idle';
+    await safeSend(bot, chatId, '✅ Name updated successfully!');
+    return await showProfileEditMenu(bot, chatId);
+  } catch (error) {
+    console.error('Error updating name:', error);
+    await safeSend(bot, chatId, '❌ Error updating name. Please try again.');
+  }
+}
 
+async function handleBioEdit(bot, chatId, text, userSessions, Tutor) {
+  try {
+    const session = userSessions[chatId];
+    const tutor = await Tutor.findById(session.tutorId);
+    
+    tutor.bio = text;
+    await tutor.save();
+    
+    session.state = 'idle';
+    await safeSend(bot, chatId, '✅ Bio updated successfully!');
+    return await showProfileEditMenu(bot, chatId);
+  } catch (error) {
+    console.error('Error updating bio:', error);
+    await safeSend(bot, chatId, '❌ Error updating bio. Please try again.');
+  }
+}
+
+async function handleExperienceEdit(bot, chatId, text, userSessions, Tutor) {
+  try {
+    const session = userSessions[chatId];
+    const tutor = await Tutor.findById(session.tutorId);
+    
+    tutor.experience = text;
+    await tutor.save();
+    
+    session.state = 'idle';
+    await safeSend(bot, chatId, '✅ Experience updated successfully!');
+    return await showProfileEditMenu(bot, chatId);
+  } catch (error) {
+    console.error('Error updating experience:', error);
+    await safeSend(bot, chatId, '❌ Error updating experience. Please try again.');
+  }
+}
+
+async function handleQualificationsEdit(bot, chatId, text, userSessions, Tutor) {
+  try {
+    const session = userSessions[chatId];
+    const tutor = await Tutor.findById(session.tutorId);
+    
+    tutor.qualifications = text;
+    await tutor.save();
+    
+    session.state = 'idle';
+    await safeSend(bot, chatId, '✅ Qualifications updated successfully!');
+    return await showProfileEditMenu(bot, chatId);
+  } catch (error) {
+    console.error('Error updating qualifications:', error);
+    await safeSend(bot, chatId, '❌ Error updating qualifications. Please try again.');
+  }
+}
+
+async function handleHourlyRateEdit(bot, chatId, text, userSessions, Tutor) {
+  try {
+    const session = userSessions[chatId];
+    const tutor = await Tutor.findById(session.tutorId);
+    
+    // Validate rate format
+    const rateMatch = text.match(/\d+/);
+    if (!rateMatch) {
+      return await safeSend(bot, chatId, '❌ Please enter a valid hourly rate (e.g., $40/hour or just 40)');
+    }
+    
+    tutor.hourlyRate = `$${rateMatch[0]}/hour`;
+    await tutor.save();
+    
+    session.state = 'idle';
+    await safeSend(bot, chatId, '✅ Hourly rate updated successfully!');
+    return await showProfileEditMenu(bot, chatId);
+  } catch (error) {
+    console.error('Error updating hourly rate:', error);
+    await safeSend(bot, chatId, '❌ Error updating hourly rate. Please try again.');
+  }
+}
 // Menu functions
-function getMainEditProfileMenu(tutor) {
-  return {
-    inline_keyboard: [
-      [{ text: '📝 Personal Info', callback_data: 'edit_personal_info' }],
-      [{ text: '🎓 Teaching Levels', callback_data: 'edit_teaching_levels' }],
-      [{ text: '📍 Locations', callback_data: 'edit_locations' }],
-      [{ text: '⏰ Availability', callback_data: 'edit_availability' }],
-      [{ text: '💰 Hourly Rates', callback_data: 'edit_hourly_rates' }],
-      [{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]
-    ]
-  };
+async function showProfileEditMenu(bot, chatId) {
+  return await safeSend(bot, chatId, '👤 Profile Settings - What would you like to update?', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '📝 Personal Info', callback_data: 'edit_personal_info' }],
+        [{ text: '💰 Hourly Rates', callback_data: 'edit_hourly_rate' }],
+        [{ text: '🎓 Teaching Levels', callback_data: 'edit_teaching_levels' }],
+        [{ text: '📍 Locations', callback_data: 'edit_locations' }],
+        [{ text: '📅 Availability', callback_data: 'edit_availability' }],
+        [{ text: '🔙 Back to Main Menu', callback_data: 'main_menu' }]
+      ]
+    }
+  });
 }
 
 function getPersonalInfoMenu(tutor) {
@@ -277,18 +258,6 @@ function getPersonalInfoMenu(tutor) {
   };
 }
 
-function getEducationExperienceMenu(tutor) {
-  return {
-    inline_keyboard: [
-      [{ text: `🎓 Highest Education: ${tutor.highestEducation || 'Not set'}`, callback_data: 'edit_education_menu' }],
-      [{ text: `👨‍🏫 Tutor Type: ${tutor.tutorType || 'Not set'}`, callback_data: 'edit_tutor_type' }],
-      [{ text: `📚 Years of Experience: ${tutor.yearsOfExperience || 'Not set'}`, callback_data: 'edit_years_experience' }],
-      [{ text: `🏫 Current School: ${tutor.currentSchool || 'Not set'}`, callback_data: 'edit_current_school' }],
-      [{ text: `🏫 Previous Schools: ${tutor.previousSchools || 'Not set'}`, callback_data: 'edit_previous_schools' }],
-      [{ text: '⬅️ Back to Personal Info', callback_data: 'edit_personal_info' }]
-    ]
-  };
-}
 function getTeachingLevelsMenu(tutor) {
   initializeTeachingLevels(tutor);
   
@@ -602,7 +571,6 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
     });
     
     if (tutor) {
-      // ✅ VERIFIED USER - Update their Telegram info
       tutor.chatId = chatId;
       tutor.userId = userId;
       if (!tutor.fullName && contact.first_name) {
@@ -617,7 +585,6 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
       console.log('✅ Verified user:', tutor.fullName || tutor.contactNumber);
       
     } else {
-      // ❌ UNVERIFIED USER - Phone not in database
       await safeSend(bot, chatId, '❌ Sorry, your phone number is not registered in our system. Please contact admin for access.', {
         reply_markup: { remove_keyboard: true }
       });
@@ -702,6 +669,71 @@ async function startAssignmentCreation(bot, chatId, userSessions) {
   });
 }
 
+// Flexible validation functions that accept any text
+function validateLevel(text) {
+  // Accept any text but provide guidance
+  const validLevels = [
+    'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6',
+    'Secondary 1', 'Secondary 2', 'Secondary 3', 'Secondary 4', 'Secondary 5',
+    'JC 1', 'JC 2', 'Polytechnic', 'University', 'Adult Learning'
+  ];
+  
+  // If it matches a predefined level, return as is
+  if (validLevels.includes(text)) {
+    return text;
+  }
+  
+  // Otherwise, accept the custom text but warn
+  console.log(`Custom level entered: ${text}`);
+  return text;
+}
+
+function validateFrequency(text) {
+  // Accept any text but provide guidance
+  const validFrequencies = [
+    'Once a week', 'Twice a week', '3 times a week', '4 times a week', 
+    '5 times a week', 'Daily', 'Flexible'
+  ];
+  
+  // If it matches a predefined frequency, return as is
+  if (validFrequencies.includes(text)) {
+    return text;
+  }
+  
+  // Otherwise, accept the custom text
+  console.log(`Custom frequency entered: ${text}`);
+  return text;
+}
+
+function parseNaturalDate(text) {
+  const today = new Date();
+  const lowerText = text.toLowerCase().trim();
+  
+  // Handle common natural language dates
+  if (lowerText === 'today') {
+    return today;
+  } else if (lowerText === 'tomorrow') {
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    return tomorrow;
+  } else if (lowerText === 'asap' || lowerText === 'immediately') {
+    return today;
+  } else if (lowerText.includes('next week')) {
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    return nextWeek;
+  } else {
+    // Try to parse as a regular date
+    const parsedDate = new Date(text);
+    if (isNaN(parsedDate.getTime())) {
+      // If parsing fails, just return the text as is for flexible handling
+      return text;
+    }
+    return parsedDate;
+  }
+}
+
+
 // Handle assignment creation steps
 async function handleAssignmentStep(bot, chatId, text, userSessions) {
   const session = userSessions[chatId];
@@ -710,10 +742,10 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
   try {
     switch (currentStep) {
       case 'title':
-        assignmentData.title = text;
+        assignmentData.title = text.trim();
         session.currentStep = 'level';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 2 of 9: Enter the education level (e.g., Primary 6, Secondary 1, JC 2):', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 2 of 9: Enter the education level\n\n*Examples:* Primary 6, Secondary 1 NA, JC 2, University, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -722,30 +754,22 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'level':
-        try {
-          assignmentData.level = validateLevel(text);
-          session.currentStep = 'subject';
-          
-          await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 3 of 9: Enter the subject:', {
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
-            }
-          });
-        } catch (error) {
-          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid education level:`, {
-            reply_markup: {
-              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
-            }
-          });
-        }
+        assignmentData.level = validateLevel(text.trim());
+        session.currentStep = 'subject';
+        
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 3 of 9: Enter the subject(s)\n\n*Examples:* Mathematics, English, Science, Physics & Chemistry, etc.', {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
+          }
+        });
         break;
       
       case 'subject':
-        assignmentData.subject = text;
+        assignmentData.subject = text.trim();
         session.currentStep = 'location';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 4 of 9: Enter the location:', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 4 of 9: Enter the location\n\n*Examples:* Tampines, Online, Tutor\'s place (Jurong), etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -754,10 +778,10 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'location':
-        assignmentData.location = text;
+        assignmentData.location = text.trim();
         session.currentStep = 'rate';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 5 of 9: Enter the hourly rate (numbers only, e.g., 50):', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 5 of 9: Enter the hourly rate\n\n*Examples:* 30, 45, 60, etc. (numbers only)', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -766,15 +790,17 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'rate':
-        const rate = parseInt(text);
-        if (isNaN(rate) || rate <= 0) {
-          await safeSend(bot, chatId, '❌ Please enter a valid hourly rate (numbers only):');
+        const rateText = text.trim();
+        // Try to extract number from text
+        const rateMatch = rateText.match(/\d+/);
+        if (!rateMatch) {
+          await safeSend(bot, chatId, '❌ Please enter a valid rate (must contain numbers)\n\n*Examples:* 30, 45, 60');
           return;
         }
-        assignmentData.rate = rate;
+        assignmentData.rate = rateMatch[0];
         session.currentStep = 'frequency';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 6 of 9: Enter the frequency (e.g., Once a week, Twice a week):', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 6 of 9: Enter the frequency\n\n*Examples:* Once a week, Twice a week, 3 times a week, Daily, Flexible, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -783,30 +809,22 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'frequency':
-        try {
-          assignmentData.frequency = validateFrequency(text);
-          session.currentStep = 'duration';
-          
-          await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 7 of 9: Enter the session duration (e.g., 1.5 hours, 2 hours):', {
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
-            }
-          });
-        } catch (error) {
-          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid frequency:`, {
-            reply_markup: {
-              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
-            }
-          });
-        }
+        assignmentData.frequency = validateFrequency(text.trim());
+        session.currentStep = 'duration';
+        
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 7 of 9: Enter the session duration\n\n*Examples:* 1.5 hours, 2 hours, 90 minutes, etc.', {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
+          }
+        });
         break;
       
       case 'duration':
-        assignmentData.duration = text;
+        assignmentData.duration = text.trim();
         session.currentStep = 'startDate';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 8 of 9: Enter the start date (e.g., today, tomorrow, next monday, 2024-12-15):', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 8 of 9: Enter the start date\n\n*Examples:* ASAP, today, tomorrow, next Monday, 15 Dec 2024, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -815,42 +833,42 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'startDate':
-        try {
-          const startDate = parseNaturalDate(text);
-          assignmentData.startDate = startDate.toLocaleDateString('en-SG');
-          session.currentStep = 'description';
-          
-          await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 9 of 9: Enter additional description (or type "skip" to skip):', {
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
-            }
-          });
-        } catch (error) {
-          await safeSend(bot, chatId, `❌ ${error.message}\n\nPlease enter a valid date:`, {
-            reply_markup: {
-              inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
-            }
-          });
+        const parsedDate = parseNaturalDate(text.trim());
+        if (parsedDate instanceof Date && !isNaN(parsedDate.getTime())) {
+          assignmentData.startDate = parsedDate;
+        } else {
+          // Store as text if parsing fails (for flexible dates like "ASAP")
+          assignmentData.startDate = text.trim();
         }
+        session.currentStep = 'description';
+        
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 9 of 9: Enter additional description or requirements\n\n*Type "skip" to leave empty*\n\n*Examples:* Looking for experienced female tutor, Student needs help with exam prep, etc.', {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
+          }
+        });
         break;
       
       case 'description':
-        if (text.toLowerCase() !== 'skip') {
-          assignmentData.description = text;
+        if (text.toLowerCase().trim() !== 'skip') {
+          assignmentData.description = text.trim();
         }
         
-        // Show confirmation
+        // Set default values
         assignmentData.status = 'Open';
         assignmentData.studentCount = 1;
         assignmentData.rateType = 'hour';
+        assignmentData.createdAt = new Date();
+        assignmentData.updatedAt = new Date();
         
-        const confirmationMsg = formatAssignment(assignmentData);
-        await safeSend(bot, chatId, `📋 *Assignment Preview*\n\n${confirmationMsg}\n\nIs this correct?`, {
+        // Show confirmation
+        const confirmationMsg = formatAssignmentPreview(assignmentData);
+        await safeSend(bot, chatId, `📋 *Assignment Preview*\n\n${confirmationMsg}\n\n✅ *Ready to post this assignment?*`, {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
-              [{ text: '✅ Post Assignment', callback_data: 'confirm_post_assignment' }],
+              [{ text: '✅ Confirm & Post Assignment', callback_data: 'confirm_post_assignment' }],
               [{ text: '❌ Cancel', callback_data: 'admin_panel' }]
             ]
           }
@@ -860,12 +878,72 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
   } catch (error) {
     console.error('Error in assignment step:', error);
     await safeSend(bot, chatId, '❌ An error occurred. Please try again.');
+    // Reset the session
     delete userSessions[chatId].state;
     delete userSessions[chatId].assignmentData;
     delete userSessions[chatId].currentStep;
   }
 }
 
+function formatAssignmentPreview(assignment) {
+  let msg = `*🎯 ${assignment.title}*\n\n`;
+  msg += `*📚 Level:* ${assignment.level}\n`;
+  msg += `*📖 Subject:* ${assignment.subject}\n`;
+  msg += `*📍 Location:* ${assignment.location}\n`;
+  msg += `*💰 Rate:* $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
+  msg += `*👥 Students:* ${assignment.studentCount || 1}\n`;
+  msg += `*📅 Frequency:* ${assignment.frequency}\n`;
+  msg += `*⏱️ Duration:* ${assignment.duration}\n`;
+  
+  // Handle different start date formats
+  if (assignment.startDate instanceof Date) {
+    msg += `*🚀 Start Date:* ${assignment.startDate.toLocaleDateString('en-SG')}\n`;
+  } else {
+    msg += `*🚀 Start Date:* ${assignment.startDate}\n`;
+  }
+  
+  if (assignment.description) {
+    msg += `\n*📝 Description:* ${assignment.description}\n`;
+  }
+  
+  msg += `\n*💼 Status:* ${assignment.status}`;
+  return msg;
+}
+
+async function confirmPostAssignment(bot, chatId, userSessions, Assignment, channelId, botUsername) {
+  try {
+    const assignmentData = userSessions[chatId].assignmentData;
+    
+    // Create assignment in database
+    const assignment = new Assignment(assignmentData);
+    const savedAssignment = await assignment.save();
+    
+    // Post to channel
+    const channelMessage = await postAssignmentToChannel(bot, savedAssignment, channelId, botUsername);
+    
+    // Store channel message ID for future reference
+    if (channelMessage && channelMessage.message_id) {
+      savedAssignment.channelMessageId = channelMessage.message_id;
+      await savedAssignment.save();
+    }
+    
+    // Clear session
+    delete userSessions[chatId].state;
+    delete userSessions[chatId].assignmentData;
+    delete userSessions[chatId].currentStep;
+    
+    await safeSend(bot, chatId, `✅ *Assignment Posted Successfully!*\n\n📋 Assignment ID: ${savedAssignment._id}\n📢 Posted to channel\n📊 Status: Open for applications`, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🔙 Back to Admin Panel', callback_data: 'admin_panel' }]]
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error confirming assignment:', error);
+    await safeSend(bot, chatId, '❌ Failed to post assignment. Please try again.');
+  }
+}
 // Post assignment to channel
 async function postAssignmentToChannel(bot, assignment, channelId, botUsername) {
   try {
@@ -880,6 +958,7 @@ async function postAssignmentToChannel(bot, assignment, channelId, botUsername) 
       }
     });
     
+    console.log(`✅ Assignment posted to channel. Message ID: ${result.message_id}`);
     return result;
   } catch (error) {
     console.error('Error posting to channel:', error);
@@ -906,8 +985,13 @@ async function handleApplication(bot, chatId, userId, assignmentId, Assignment, 
       return;
     }
     
-    // Check if user already applied
-    const existingApplication = assignment.applications.find(app => app.tutorId.toString() === userSessions[chatId].tutorId);
+    // Initialize applicants array if it doesn't exist (safety check)
+    if (!assignment.applicants) {
+      assignment.applicants = [];
+    }
+    
+    // Check if user already applied (using 'applicants' not 'applications')
+    const existingApplication = assignment.applicants.find(app => app.tutorId.toString() === userSessions[chatId].tutorId);
     if (existingApplication) {
       await safeSend(bot, chatId, '⚠️ You have already applied for this assignment.');
       return;
@@ -920,18 +1004,19 @@ async function handleApplication(bot, chatId, userId, assignmentId, Assignment, 
       return;
     }
     
-    // Add application
-    assignment.applications.push({
+    // Add application to applicants array
+    assignment.applicants.push({
       tutorId: tutor._id,
-      tutorName: tutor.fullName,
-      tutorContact: tutor.contactNumber,
-      appliedAt: new Date()
+      status: 'Pending', // This matches your schema enum
+      appliedAt: new Date(),
+      contactDetails: tutor.contactNumber, // Store contact info as per schema
+      notes: `Applied via bot by ${tutor.fullName}`
     });
     
     await assignment.save();
     
     const assignmentMsg = formatAssignment(assignment);
-    await safeSend(bot, chatId, `✅ *Application Submitted Successfully!*\n\n${assignmentMsg}`, {
+    await safeSend(bot, chatId, `✅ *Application Submitted Successfully!*\n\n${assignmentMsg}\n\n📝 *Application Status:* Pending\n⏰ *Applied At:* ${new Date().toLocaleString('en-SG')}`, {
       parse_mode: 'Markdown'
     });
     
@@ -1848,6 +1933,27 @@ async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignme
     return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
   }
 
+  // Profile editing states
+  if (session.state === 'editing_name') {
+    return await handleNameEdit(bot, chatId, text, userSessions, Tutor);
+  }
+
+  if (session.state === 'editing_bio') {
+    return await handleBioEdit(bot, chatId, text, userSessions, Tutor);
+  }
+
+  if (session.state === 'editing_experience') {
+    return await handleExperienceEdit(bot, chatId, text, userSessions, Tutor);
+  }
+
+  if (session.state === 'editing_qualifications') {
+    return await handleQualificationsEdit(bot, chatId, text, userSessions, Tutor);
+  }
+
+  if (session.state === 'editing_hourly_rate') {
+    return await handleHourlyRateEdit(bot, chatId, text, userSessions, Tutor);
+  }
+
   // Default response - show main menu
   await safeSend(bot, chatId, 'I didn\'t understand that command. Here\'s the main menu:');
   return await showMainMenu(chatId, bot, userId, ADMIN_USERS);
@@ -1942,6 +2048,7 @@ export {
   viewMyApplications,
   adminViewAllApplications,
   adminManageAssignments,
+  confirmPostAssignment,
   
   // Constants
   ITEMS_PER_PAGE
