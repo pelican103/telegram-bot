@@ -1737,7 +1737,7 @@ async function handleCallbackQuery(
   }
 }
 
-export async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignment, userSessions, ADMIN_USERS) {
+async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignment, userSessions, ADMIN_USERS) {
   // Initialize session
   if (!userSessions[userId]) {
     userSessions[userId] = { state: 'idle' };
