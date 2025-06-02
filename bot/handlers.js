@@ -1284,7 +1284,7 @@ async function handleCallbackQuery(
       const profileMsg = formatTutorProfile(tutor);
       return await safeSend(bot, chatId, `${profileMsg}\n\nWhat would you like to edit?`, {
         parse_mode: 'Markdown',
-        reply_markup: getMainEditProfileMenu(tutor)
+        reply_markup: showProfileEditMenu(tutor)
       });
     }
     
@@ -2018,7 +2018,7 @@ export {
   formatAssignmentForChannel,
   
   // Menu functions
-  getMainEditProfileMenu,
+  showProfileEditMenu,
   getPersonalInfoMenu,
   getTeachingLevelsMenu,
   getLocationsMenu,
