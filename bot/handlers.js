@@ -1739,15 +1739,40 @@ async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignme
   const session = userSessions[chatId];
   const isUserAdmin = isAdmin(userId, ADMIN_USERS);
 
+  // Handle non-text messages first
+  if (!text || typeof text !== 'string') {
+    // Handle contact sharing - delegate to your existing handleContact function
+    if (message.contact) {
+      return await handleContact(bot, chatId, userId, message.contact, Tutor, userSessions, ADMIN_USERS);
+    }
+    
+    // For other non-text messages, show main menu or prompt for contact if needed
+    if (session.state === 'awaiting_contact') {
+      return await safeSend(bot, chatId, '👋 Please share your contact number using the button below to continue.', {
+        reply_markup: {
+          keyboard: [[{
+            text: '📞 Share Contact Number',
+            request_contact: true
+          }]],
+          one_time_keyboard: true,
+          resize_keyboard: true
+        }
+      });
+    }
+    
+    // For users without proper setup, redirect to start
+    if (!session.tutorId) {
+      return await handleStart(bot, chatId, userId, Tutor, userSessions, null, Assignment, ADMIN_USERS, BOT_USERNAME);
+    }
+    
+    // Show main menu for established users
+    return await showMainMenu(chatId, bot, userId, ADMIN_USERS);
+  }
+
   // Handle /start command - delegate to your existing handleStart function
   if (text === '/start' || text.startsWith('/start ')) {
     const startParam = text.includes(' ') ? text.split(' ')[1] : null;
     return await handleStart(bot, chatId, userId, Tutor, userSessions, startParam, Assignment, ADMIN_USERS, BOT_USERNAME);
-  }
-
-  // Handle contact sharing - delegate to your existing handleContact function
-  if (message.contact) {
-    return await handleContact(bot, chatId, userId, message.contact, Tutor, userSessions, ADMIN_USERS);
   }
 
   // Check if user is in awaiting_contact state
