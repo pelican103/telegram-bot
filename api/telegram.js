@@ -1,4 +1,8 @@
+// Try this import instead
 import TelegramBot from 'node-telegram-bot-api';
+// OR
+// const TelegramBot = require('node-telegram-bot-api');
+
 import mongoose from 'mongoose';
 import Tutor from '../models/Tutor.js';
 import Assignment from '../models/Assignment.js';
@@ -30,13 +34,31 @@ async function connectToDatabase() {
   }
 }
 
-// Bot init
+// Bot init with better error handling
 function getBot() {
   if (!bot) {
-    if (!process.env.BOT_TOKEN) throw new Error('BOT_TOKEN is required');
+    if (!process.env.BOT_TOKEN) {
+      throw new Error('BOT_TOKEN environment variable is required');
+    }
+    
     console.log('🤖 Initializing Telegram bot...');
-    bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
     console.log('📛 Using bot token starting with:', process.env.BOT_TOKEN.slice(0, 8));
+    
+    try {
+      bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
+      console.log('✅ Bot initialized successfully');
+      
+      // Test if bot has sendMessage method
+      if (typeof bot.sendMessage !== 'function') {
+        console.error('❌ Bot does not have sendMessage method');
+        console.error('Bot methods:', Object.getOwnPropertyNames(bot));
+        throw new Error('Bot initialization failed - sendMessage method missing');
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize bot:', error);
+      throw error;
+    }
   }
   return bot;
 }
@@ -44,9 +66,14 @@ function getBot() {
 // Load handlers dynamically
 async function loadHandlers() {
   if (!handlers) {
-    const handlersModule = await import('../bot/handlers.js');
-    handlers = handlersModule;
-    console.log('✅ Handlers loaded');
+    try {
+      const handlersModule = await import('../bot/handlers.js');
+      handlers = handlersModule;
+      console.log('✅ Handlers loaded');
+    } catch (error) {
+      console.error('❌ Failed to load handlers:', error);
+      throw error;
+    }
   }
   return handlers;
 }
@@ -64,6 +91,10 @@ export default async function handler(req, res) {
     const botInstance = getBot();
     const handlers = await loadHandlers();
     const update = req.body;
+
+    // Add debug logging
+    console.log('🔍 Bot instance type:', typeof botInstance);
+    console.log('🔍 Bot has sendMessage:', typeof botInstance.sendMessage);
 
     const context = {
       Tutor,
