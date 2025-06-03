@@ -226,34 +226,37 @@ async function handleHourlyRateEdit(bot, chatId, text, userSessions, Tutor) {
   }
 }
 // Menu functions
-async function showProfileEditMenu(bot, chatId) {
-  return await safeSend(bot, chatId, '👤 Profile Settings - What would you like to update?', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '📝 Personal Info', callback_data: 'edit_personal_info' }],
-        [{ text: '💰 Hourly Rates', callback_data: 'edit_hourly_rate' }],
-        [{ text: '🎓 Teaching Levels', callback_data: 'edit_teaching_levels' }],
-        [{ text: '📍 Locations', callback_data: 'edit_locations' }],
-        [{ text: '📅 Availability', callback_data: 'edit_availability' }],
-        [{ text: '🔙 Back to Main Menu', callback_data: 'main_menu' }]
-      ]
-    }
-  });
+function showProfileEditMenu(tutor) {
+  // This should return a keyboard object, NOT call safeSend
+  return {
+    inline_keyboard: [
+      [{ text: '👤 Personal Info', callback_data: 'edit_personal_info' }],
+      [{ text: '📚 Teaching Levels', callback_data: 'edit_teaching_levels' }],
+      [{ text: '📍 Locations', callback_data: 'edit_locations' }],
+      [{ text: '⏰ Availability', callback_data: 'edit_availability' }],
+      [{ text: '💰 Hourly Rates', callback_data: 'edit_hourly_rates' }],
+      [{ text: '🔙 Back to Main Menu', callback_data: 'main_menu' }]
+    ]
+  };
 }
 
 function getPersonalInfoMenu(tutor) {
   return {
     inline_keyboard: [
-      [{ text: `👤 Full Name: ${tutor.fullName || 'Not set'}`, callback_data: 'edit_full_name' }],
-      [{ text: `📧 Email: ${tutor.email || 'Not set'}`, callback_data: 'edit_email' }],
-      [{ text: `🎂 Age: ${tutor.age || 'Not set'}`, callback_data: 'edit_age' }],
-      [{ text: `📅 Date of Birth`, callback_data: 'edit_dob' }],
-      [{ text: `👥 Gender: ${tutor.gender || 'Not set'}`, callback_data: 'edit_gender_menu' }],
-      [{ text: `🌍 Nationality: ${tutor.nationality || tutor.nationalityOther || 'Not set'}`, callback_data: 'edit_nationality' }],
-      [{ text: `🏃‍♂️ Race: ${tutor.race || 'Not set'}`, callback_data: 'edit_race_menu' }],
-      [{ text: `🆔 NRIC (Last 4): ${tutor.nricLast4 || 'Not set'}`, callback_data: 'edit_nric' }],
-      [{ text: '🎓 Education & Experience', callback_data: 'edit_education_experience' }],
-      [{ text: '⬅️ Back to Profile Edit', callback_data: 'profile_edit' }]
+      [{ text: '👤 Full Name', callback_data: 'edit_full_name' }],
+      [{ text: '📱 Contact Number', callback_data: 'edit_contact_number' }],
+      [{ text: '🎂 Age', callback_data: 'edit_age' }],
+      [{ text: '👫 Gender', callback_data: 'edit_gender_menu' }],
+      [{ text: '🌍 Race', callback_data: 'edit_race_menu' }],
+      [{ text: '🏛️ Nationality', callback_data: 'edit_nationality' }],
+      [{ text: '🆔 NRIC (Last 4)', callback_data: 'edit_nric' }],
+      [{ text: '📧 Email', callback_data: 'edit_email' }],
+      [{ text: '📅 Date of Birth', callback_data: 'edit_dob' }],
+      [{ text: '🎓 Education', callback_data: 'edit_education_menu' }],
+      [{ text: '👨‍🏫 Tutor Type', callback_data: 'edit_tutor_type' }],
+      [{ text: '🏫 Current School', callback_data: 'edit_current_school' }],
+      [{ text: '📝 Introduction', callback_data: 'edit_introduction' }],
+      [{ text: '🔙 Back', callback_data: 'profile_edit' }]
     ]
   };
 }
@@ -1282,9 +1285,11 @@ async function handleCallbackQuery(
       }
     
       const profileMsg = formatTutorProfile(tutor);
+      const keyboard = showProfileEditMenu(tutor); 
+      
       return await safeSend(bot, chatId, `${profileMsg}\n\nWhat would you like to edit?`, {
         parse_mode: 'Markdown',
-        reply_markup: showProfileEditMenu(tutor)
+        reply_markup: keyboard  
       });
     }
     
