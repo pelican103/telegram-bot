@@ -412,8 +412,8 @@ function getInternationalSubjectsMenu(tutor) {
 function getGenderMenu() {
   return {
     inline_keyboard: [
-      [{ text: 'Male', callback_data: 'set_gender_male' }],
-      [{ text: 'Female', callback_data: 'set_gender_female' }],
+      [{ text: '👨 Male', callback_data: 'set_gender_male' }],
+      [{ text: '👩 Female', callback_data: 'set_gender_female' }],
       [{ text: '🔙 Back', callback_data: 'edit_personal_info' }]
     ]
   };
@@ -432,6 +432,28 @@ function getRaceMenu() {
   };
 }
 
+function getTutorTypeMenu() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '👨‍🏫 Full-time Tutor', callback_data: 'set_tutor_type_fulltime' },
+        { text: '👩‍🏫 Part-time Tutor', callback_data: 'set_tutor_type_parttime' }
+      ],
+      [
+        { text: '🎓 MOE Teacher', callback_data: 'set_tutor_type_moe' },
+        { text: '👨‍🎓 Ex-MOE Teacher', callback_data: 'set_tutor_type_exmoe' }
+      ],
+      [
+        { text: '🎓 NIE Trainee', callback_data: 'set_tutor_type_nie' },
+        { text: '👨‍🎓 Undergraduate', callback_data: 'set_tutor_type_undergraduate' }
+      ],
+      [
+        { text: '← Back', callback_data: 'edit_personal_info' }
+      ]
+    ]
+  };
+}
+
 function getEducationMenu() {
   return {
     inline_keyboard: [
@@ -441,6 +463,20 @@ function getEducationMenu() {
       [{ text: 'Masters', callback_data: 'set_education_masters' }],
       [{ text: 'PhD', callback_data: 'set_education_phd' }],
       [{ text: 'Others', callback_data: 'set_education_others' }],
+      [{ text: '🔙 Back', callback_data: 'edit_personal_info' }]
+    ]
+  };
+}
+
+function getNationalityMenu() {
+  return {
+    inline_keyboard: [
+      [{ text: 'Singaporean', callback_data: 'set_nationality_singaporean' }],
+      [{ text: 'PR', callback_data: 'set_nationality_pr' }],
+      [{ text: 'Malaysian', callback_data: 'set_nationality_malaysian' }],
+      [{ text: 'Chinese', callback_data: 'set_nationality_chinese' }],
+      [{ text: 'Indian', callback_data: 'set_nationality_indian' }],
+      [{ text: 'Others', callback_data: 'set_nationality_other' }],
       [{ text: '🔙 Back', callback_data: 'edit_personal_info' }]
     ]
   };
@@ -2206,88 +2242,6 @@ async function handleCallbackQuery(
         reply_markup: getInternationalSubjectsMenu(tutor)
       });
     }
-    if (session.state === 'awaiting_age') {
-      return await handleAgeEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Full name editing
-    if (session.state === 'awaiting_full_name') {
-      return await handleFullNameEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Contact number editing
-    if (session.state === 'awaiting_contact_number') {
-      return await handleContactNumberEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // NRIC editing
-    if (session.state === 'awaiting_nric') {
-      return await handleNRICEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Email editing
-    if (session.state === 'awaiting_email') {
-      return await handleEmailEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // DOB editing
-    if (session.state === 'awaiting_dob_day') {
-      return await handleDOBDayEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    if (session.state === 'awaiting_dob_month') {
-      return await handleDOBMonthEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    if (session.state === 'awaiting_dob_year') {
-      return await handleDOBYearEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Introduction editing
-    if (session.state === 'awaiting_introduction') {
-      return await handleIntroductionEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Teaching experience editing
-    if (session.state === 'awaiting_teaching_experience') {
-      return await handleTeachingExperienceEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Track record editing
-    if (session.state === 'awaiting_track_record') {
-      return await handleTrackRecordEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Selling points editing
-    if (session.state === 'awaiting_selling_points') {
-      return await handleSellingPointsEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Years experience editing
-    if (session.state === 'awaiting_years_experience') {
-      return await handleYearsExperienceEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Current school editing
-    if (session.state === 'awaiting_current_school') {
-      return await handleCurrentSchoolEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Previous schools editing
-    if (session.state === 'awaiting_previous_schools') {
-      return await handlePreviousSchoolsEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Nationality other editing
-    if (session.state === 'awaiting_nationality_other') {
-      return await handleNationalityOtherEdit(bot, chatId, text, userSessions, Tutor);
-    }
-    
-    // Hourly rate editing for specific levels
-    if (session.state.startsWith('awaiting_rate_')) {
-      const level = session.state.replace('awaiting_rate_', '');
-      return await handleSpecificRateEdit(bot, chatId, text, level, userSessions, Tutor);
-    }
 
     // Subject toggle handlers
     const toggleCategories = ['primary', 'secondary', 'jc', 'international'];
@@ -2442,7 +2396,7 @@ async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignme
     return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
   }
 
-  // Profile editing states
+  // Profile editing states - MOVED FROM handleCallbackQuery
   if (session.state === 'editing_name') {
     return await handleNameEdit(bot, chatId, text, userSessions, Tutor);
   }
@@ -2461,6 +2415,90 @@ async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignme
 
   if (session.state === 'editing_hourly_rate') {
     return await handleHourlyRateEdit(bot, chatId, text, userSessions, Tutor);
+  }
+
+  // ADD ALL THE TEXT INPUT HANDLERS HERE (moved from handleCallbackQuery)
+  if (session.state === 'awaiting_age') {
+    return await handleAgeEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Full name editing
+  if (session.state === 'awaiting_full_name') {
+    return await handleFullNameEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Contact number editing
+  if (session.state === 'awaiting_contact_number') {
+    return await handleContactNumberEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // NRIC editing
+  if (session.state === 'awaiting_nric') {
+    return await handleNRICEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Email editing
+  if (session.state === 'awaiting_email') {
+    return await handleEmailEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // DOB editing
+  if (session.state === 'awaiting_dob_day') {
+    return await handleDOBDayEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  if (session.state === 'awaiting_dob_month') {
+    return await handleDOBMonthEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  if (session.state === 'awaiting_dob_year') {
+    return await handleDOBYearEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Introduction editing
+  if (session.state === 'awaiting_introduction') {
+    return await handleIntroductionEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Teaching experience editing
+  if (session.state === 'awaiting_teaching_experience') {
+    return await handleTeachingExperienceEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Track record editing
+  if (session.state === 'awaiting_track_record') {
+    return await handleTrackRecordEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Selling points editing
+  if (session.state === 'awaiting_selling_points') {
+    return await handleSellingPointsEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Years experience editing
+  if (session.state === 'awaiting_years_experience') {
+    return await handleYearsExperienceEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Current school editing
+  if (session.state === 'awaiting_current_school') {
+    return await handleCurrentSchoolEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Previous schools editing
+  if (session.state === 'awaiting_previous_schools') {
+    return await handlePreviousSchoolsEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Nationality other editing
+  if (session.state === 'awaiting_nationality_other') {
+    return await handleNationalityOtherEdit(bot, chatId, text, userSessions, Tutor);
+  }
+  
+  // Hourly rate editing for specific levels
+  if (session.state.startsWith('awaiting_rate_')) {
+    const level = session.state.replace('awaiting_rate_', '');
+    return await handleSpecificRateEdit(bot, chatId, text, level, userSessions, Tutor);
   }
 
   // Default response - show main menu
@@ -2539,7 +2577,9 @@ export {
   getGenderMenu,
   getRaceMenu,
   getEducationMenu,
+  getNationalityMenu,
   getHourlyRatesMenu,
+  getTutorTypeMenu,
   
   // Core handler functions
   safeSend,
