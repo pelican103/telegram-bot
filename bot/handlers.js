@@ -46,6 +46,19 @@ function initializeLocations(tutor) {
   }
 }
 
+// Helper function to get tutor from session
+async function getTutorFromSession(chatId, userSessions, Tutor) {
+  let tutor;
+  if (userSessions[chatId]?.tutorId) {
+    tutor = await Tutor.findById(userSessions[chatId].tutorId);
+  }
+  if (!tutor && userSessions[chatId]?.contactNumber) {
+    const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
+    tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
+  }
+  return tutor;
+}
+
 function getTick(value) {
   return value ? '✅' : '❌';
 }
@@ -477,6 +490,22 @@ function getNationalityMenu() {
       [{ text: 'Chinese', callback_data: 'set_nationality_chinese' }],
       [{ text: 'Indian', callback_data: 'set_nationality_indian' }],
       [{ text: 'Others', callback_data: 'set_nationality_other' }],
+      [{ text: '🔙 Back', callback_data: 'edit_personal_info' }]
+    ]
+  };
+}
+
+function getDOBMenu(tutor) {
+  const dob = tutor.dateOfBirth || { day: null, month: null, year: null };
+  const dayText = dob.day ? `📅 Day: ${dob.day}` : '📅 Set Day';
+  const monthText = dob.month ? `📅 Month: ${dob.month}` : '📅 Set Month';
+  const yearText = dob.year ? `📅 Year: ${dob.year}` : '📅 Set Year';
+  
+  return {
+    inline_keyboard: [
+      [{ text: dayText, callback_data: 'edit_dob_day' }],
+      [{ text: monthText, callback_data: 'edit_dob_month' }],
+      [{ text: yearText, callback_data: 'edit_dob_year' }],
       [{ text: '🔙 Back', callback_data: 'edit_personal_info' }]
     ]
   };
@@ -1680,19 +1709,6 @@ async function handleCallbackQuery(
   try {
     console.log("📥 Callback data received:", data);
 
-    // Helper function to get tutor from session
-    const getTutorFromSession = async (chatId) => {
-      let tutor;
-      if (userSessions[chatId]?.tutorId) {
-        tutor = await Tutor.findById(userSessions[chatId].tutorId);
-      }
-      if (!tutor && userSessions[chatId]?.contactNumber) {
-        const phoneVariations = normalizePhone(userSessions[chatId].contactNumber);
-        tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
-      }
-      return tutor;
-    };
-
     // Main menu and admin handlers
     if (data === 'main_menu') {
       return await showMainMenu(chatId, bot, userId, ADMIN_USERS);
@@ -2578,6 +2594,7 @@ export {
   getRaceMenu,
   getEducationMenu,
   getNationalityMenu,
+  getDOBMenu,
   getHourlyRatesMenu,
   getTutorTypeMenu,
   
