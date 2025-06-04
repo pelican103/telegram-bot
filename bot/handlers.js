@@ -1753,7 +1753,7 @@ async function handleCallbackQuery(
 
     // Profile editing handlers
     if (data === 'profile_edit') {
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
@@ -1768,7 +1768,7 @@ async function handleCallbackQuery(
     }
     
     if (data === 'edit_personal_info') {
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
@@ -1796,7 +1796,7 @@ async function handleCallbackQuery(
     }
     // Gender editing
     if (data === 'edit_gender_menu') {
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
@@ -1808,7 +1808,7 @@ async function handleCallbackQuery(
     
     if (data.startsWith('set_gender_')) {
       const gender = data.replace('set_gender_', '');
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
@@ -1824,7 +1824,7 @@ async function handleCallbackQuery(
     
     // Race editing
     if (data === 'edit_race_menu') {
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
@@ -1836,7 +1836,7 @@ async function handleCallbackQuery(
     
     if (data.startsWith('set_race_')) {
       const race = data.replace('set_race_', '');
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
@@ -1852,7 +1852,7 @@ async function handleCallbackQuery(
 
     // Education editing
     if (data === 'edit_education_menu') {
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
@@ -1864,7 +1864,7 @@ async function handleCallbackQuery(
 
     if (data.startsWith('set_education_')) {
       const edu = data.replace('set_education_', '');
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
@@ -1880,7 +1880,7 @@ async function handleCallbackQuery(
 
     // Teaching levels editing
     if (data === 'edit_teaching_levels') {
-      const tutor = await getTutorFromSession(chatId);
+      const tutor = await getTutorFromSession(chatId, userSessions, Tutor);
       if (!tutor) {
         return await safeSend(bot, chatId, '❌ We couldn\'t find your profile. Please type /start and share your contact number again.');
       }
