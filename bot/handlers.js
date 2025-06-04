@@ -177,7 +177,6 @@ function formatAssignmentForChannel(assignment, botUsername) {
   msg += `💰 *Rate:* $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
   msg += `👥 *Students:* ${assignment.studentCount || 1}\n`;
   msg += `📅 *Frequency:* ${assignment.frequency}\n`;
-  msg += `⏱️ *Duration:* ${assignment.duration}\n`;
   msg += `🚀 *Start Date:* ${assignment.startDate}\n`;
   
   if (assignment.description) {
@@ -185,7 +184,7 @@ function formatAssignmentForChannel(assignment, botUsername) {
   }
   
   msg += `\n💼 *Status:* ${assignment.status}`;
-  msg += `\n\n👆 *Click below to apply for this assignment!*`;
+  msg += `\n\n👇 *Click below to apply for this assignment!*`;
   
   return msg;
 }
@@ -684,7 +683,7 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
     
     // Show profile and main menu
     const profileMsg = formatTutorProfile(tutor);
-    await safeSend(bot, chatId, {profileMsg}, { parse_mode: 'Markdown' });
+    await safeSend(bot, chatId, profileMsg, { parse_mode: 'Markdown' });
     await showMainMenu(chatId, bot, userId, ADMIN_USERS);
     
   } catch (error) {
