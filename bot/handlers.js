@@ -1750,6 +1750,13 @@ async function handleCallbackQuery(
       return await showAdminPanel(chatId, bot);
     }
 
+    if (data === 'confirm_post_assignment') {
+      if (!isAdmin(userId, ADMIN_USERS)) {
+        return await safeSend(bot, chatId, 'You are not authorized to post assignments.');
+      }
+      return await confirmPostAssignment(bot, chatId, userSessions, Assignment, CHANNEL_ID, BOT_USERNAME);
+    }
+
     if (data.trim() === 'admin_post_assignment') {
       return await startAssignmentCreation(bot, chatId, userSessions);
     }
