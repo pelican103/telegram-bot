@@ -156,10 +156,8 @@ function formatAssignment(assignment) {
   msg += `*Level:* ${assignment.level}\n`;
   msg += `*Subject:* ${assignment.subject}\n`;
   msg += `*Location:* ${assignment.location}\n`;
-  msg += `*Rate:* $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
-  msg += `*Students:* ${assignment.studentCount || 1}\n`;
+  msg += `*Rate:* ${assignment.rate}\n`;
   msg += `*Frequency:* ${assignment.frequency}\n`;
-  msg += `*Duration:* ${assignment.duration}\n`;
   msg += `*Start Date:* ${assignment.startDate}\n`;
   
   if (assignment.description) {
@@ -558,10 +556,10 @@ function getDOBMenu(tutor) {
 function getHourlyRatesMenu(tutor) {
   return {
     inline_keyboard: [
-      [{ text: `💰 Primary Rate: $${tutor.hourlyRate?.primary || 'Not set'}`, callback_data: 'edit_rate_primary' }],
-      [{ text: `💰 Secondary Rate: $${tutor.hourlyRate?.secondary || 'Not set'}`, callback_data: 'edit_rate_secondary' }],
-      [{ text: `💰 JC Rate: $${tutor.hourlyRate?.jc || 'Not set'}`, callback_data: 'edit_rate_jc' }],
-      [{ text: `💰 International Rate: $${tutor.hourlyRate?.international || 'Not set'}`, callback_data: 'edit_rate_international' }],
+      [{ text: `💰 Primary Rate: $${tutor.hourlyRate?.primary || 'Not set'}/hour`, callback_data: 'edit_rate_primary' }],
+      [{ text: `💰 Secondary Rate: $${tutor.hourlyRate?.secondary || 'Not set'}/hour`, callback_data: 'edit_rate_secondary' }],
+      [{ text: `💰 JC Rate: $${tutor.hourlyRate?.jc || 'Not set'}/hour`, callback_data: 'edit_rate_jc' }],
+      [{ text: `💰 International Rate: $${tutor.hourlyRate?.international || 'Not set'}/hour`, callback_data: 'edit_rate_international' }],
       [{ text: '🔙 Back to Profile Edit', callback_data: 'profile_edit' }]
     ]
   };
@@ -683,7 +681,7 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
     
     // Show profile and main menu
     const profileMsg = formatTutorProfile(tutor);
-    await safeSend(bot, chatId, `Your Profile:\n\n${profileMsg}`, { parse_mode: 'Markdown' });
+    await safeSend(bot, chatId, {profileMsg}, { parse_mode: 'Markdown' });
     await showMainMenu(chatId, bot, userId, ADMIN_USERS);
     
   } catch (error) {
@@ -1131,7 +1129,7 @@ async function viewAssignments(bot, chatId, page = 0, Assignment) {
       message += `📚 Level: ${assignment.level}\n`;
       message += `📖 Subject: ${assignment.subject}\n`;
       message += `📍 Location: ${assignment.location}\n`;
-      message += `💰 Rate: $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
+      message += `💰 Rate: ${assignment.rate}\n`;
       message += `📅 Frequency: ${assignment.frequency}\n`;
       message += `🚀 Start: ${assignment.startDate}\n`;
       
@@ -1156,8 +1154,13 @@ async function viewAssignments(bot, chatId, page = 0, Assignment) {
 async function viewMyApplications(bot, chatId, userSessions, Assignment) {
   try {
     const tutorId = userSessions[chatId].tutorId;
+    if (!tutorId) {
+      return await safeSend(bot, chatId, '❌ Please start with /start and share your contact before viewing applications.');
+    }
+
+    // Find assignments where this tutor has applied
     const assignments = await Assignment.find({
-      'applications.tutorId': tutorId
+      'applicants.tutorId': tutorId
     }).sort({ createdAt: -1 });
     
     if (assignments.length === 0) {
@@ -1175,15 +1178,15 @@ async function viewMyApplications(bot, chatId, userSessions, Assignment) {
     let message = `📋 *My Applications*\n\n`;
     
     assignments.forEach((assignment, index) => {
-      const myApplication = assignment.applications.find(app => app.tutorId.toString() === tutorId);
+      const myApplication = assignment.applicants.find(app => app.tutorId.toString() === tutorId.toString());
       
       message += `*${index + 1}. ${assignment.title || 'Assignment'}*\n`;
       message += `📚 Level: ${assignment.level}\n`;
       message += `📖 Subject: ${assignment.subject}\n`;
       message += `📍 Location: ${assignment.location}\n`;
-      message += `💰 Rate: $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
+      message += `💰 Rate: ${assignment.rate}\n`;
       message += `📅 Applied: ${myApplication.appliedAt.toLocaleDateString('en-SG')}\n`;
-      message += `🔄 Status: ${assignment.status}\n\n`;
+      message += `🔄 Status: ${myApplication.status}\n\n`;
     });
     
     await safeSend(bot, chatId, message, {
@@ -1203,7 +1206,7 @@ async function viewMyApplications(bot, chatId, userSessions, Assignment) {
 async function adminViewAllApplications(bot, chatId, Assignment) {
   try {
     const assignments = await Assignment.find({
-      applications: { $exists: true, $not: { $size: 0 } }
+      'applicants': { $exists: true, $not: { $size: 0 } }
     }).sort({ createdAt: -1 });
     
     if (assignments.length === 0) {
@@ -1221,10 +1224,15 @@ async function adminViewAllApplications(bot, chatId, Assignment) {
       message += `*${index + 1}. ${assignment.title || 'Assignment'}*\n`;
       message += `📚 ${assignment.level} - ${assignment.subject}\n`;
       message += `📍 ${assignment.location}\n`;
-      message += `👥 Applications: ${assignment.applications.length}\n`;
+      message += `👥 Applications: ${assignment.applicants.length}\n`;
       
-      assignment.applications.forEach((app, appIndex) => {
-        message += `  ${appIndex + 1}. ${app.tutorName} (${app.tutorContact})\n`;
+      assignment.applicants.forEach((app, appIndex) => {
+        message += `  ${appIndex + 1}. Status: ${app.status}\n`;
+        message += `     Contact: ${app.contactDetails}\n`;
+        message += `     Applied: ${app.appliedAt.toLocaleDateString('en-SG')}\n`;
+        if (app.notes) {
+          message += `     Notes: ${app.notes}\n`;
+        }
       });
       
       message += '\n';
@@ -1686,11 +1694,18 @@ async function handleSpecificRateEdit(bot, chatId, text, level, userSessions, Tu
       return await safeSend(bot, chatId, '❌ Please enter a rate between $10-$200 per hour:');
     }
     
-    if (!tutor.hourlyRates) {
-      tutor.hourlyRates = {};
+    // Initialize hourlyRate if it doesn't exist
+    if (!tutor.hourlyRate) {
+      tutor.hourlyRate = {
+        primary: '',
+        secondary: '',
+        jc: '',
+        international: ''
+      };
     }
     
-    tutor.hourlyRates[level] = rate;
+    // Update the rate for the specific level
+    tutor.hourlyRate[level] = rate.toString();
     await tutor.save();
     
     session.state = 'idle';
@@ -1703,6 +1718,7 @@ async function handleSpecificRateEdit(bot, chatId, text, level, userSessions, Tu
     await safeSend(bot, chatId, '❌ Error updating hourly rate. Please try again.');
   }
 }
+
 // Fixed version of handleCallbackQuery with all editable fields and menus handled
 async function handleCallbackQuery(
   bot,
@@ -2368,61 +2384,12 @@ async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignme
     return await handleStart(bot, chatId, userId, Tutor, userSessions, null, Assignment, ADMIN_USERS, BOT_USERNAME);
   }
 
-  // Admin assignment creation flow
-  if (isUserAdmin && text === '/newassignment') {
-    session.state = 'awaiting_assignment_title';
-    session.assignmentDraft = {};
-    return await safeSend(bot, chatId, 'Please enter the assignment title:');
+  // Handle assignment creation flow
+  if (session.state === 'creating_assignment') {
+    return await handleAssignmentStep(bot, chatId, text, userSessions);
   }
 
-  if (isUserAdmin && session.state === 'awaiting_assignment_title') {
-    session.assignmentDraft.title = text;
-    session.state = 'awaiting_assignment_subject';
-    return await safeSend(bot, chatId, 'Enter the subject:');
-  }
-
-  if (isUserAdmin && session.state === 'awaiting_assignment_subject') {
-    session.assignmentDraft.subject = text;
-    session.state = 'awaiting_assignment_level';
-    return await safeSend(bot, chatId, 'Enter the level (e.g., Secondary 2):');
-  }
-
-  if (isUserAdmin && session.state === 'awaiting_assignment_level') {
-    session.assignmentDraft.level = text;
-    session.state = 'awaiting_assignment_description';
-    return await safeSend(bot, chatId, 'Enter the description:');
-  }
-
-  if (isUserAdmin && session.state === 'awaiting_assignment_description') {
-    session.assignmentDraft.description = text;
-    session.state = 'awaiting_assignment_rate';
-    return await safeSend(bot, chatId, 'Enter the rate (e.g., $40/hour):');
-  }
-
-  if (isUserAdmin && session.state === 'awaiting_assignment_rate') {
-    session.assignmentDraft.rate = text;
-    session.state = 'idle';
-
-    const assignment = new Assignment({
-      ...session.assignmentDraft,
-      frequency: 'Once a week',
-      startDate: new Date(),
-      location: 'Online',
-      duration: '1h',
-    });
-
-    await assignment.save();
-    await safeSend(bot, chatId, `✅ Assignment created:\n\n${assignment.title}`);
-    return;
-  }
-
-  // Handle direct application commands (legacy support)
-  if (text.startsWith('/apply_')) {
-    const assignmentId = text.split('_')[1];
-    return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
-  }
-
-  // Profile editing states - MOVED FROM handleCallbackQuery
+  // Profile editing states
   if (session.state === 'editing_name') {
     return await handleNameEdit(bot, chatId, text, userSessions, Tutor);
   }
@@ -2537,7 +2504,7 @@ async function adminManageAssignments(bot, chatId, Assignment) {
   try {
     const assignments = await Assignment.find().sort({ createdAt: -1 }).limit(10);
     
-    if (assignments.length === 0) {
+    if (!assignments || assignments.length === 0) {
       await safeSend(bot, chatId, '📋 No assignments found.', {
         reply_markup: {
           inline_keyboard: [[{ text: '🔙 Back to Admin Panel', callback_data: 'admin_panel' }]]
@@ -2553,7 +2520,7 @@ async function adminManageAssignments(bot, chatId, Assignment) {
       message += `*${index + 1}. ${assignment.title || 'Assignment'}*\n`;
       message += `📚 ${assignment.level} - ${assignment.subject}\n`;
       message += `🔄 Status: ${assignment.status}\n`;
-      message += `👥 Applications: ${assignment.applications.length}\n\n`;
+      message += `👥 Applications: ${assignment.applicants ? assignment.applicants.length : 0}\n\n`;
       
       buttons.push([{ text: `✏️ Edit Assignment ${index + 1}`, callback_data: `edit_assignment_${assignment._id}` }]);
     });
