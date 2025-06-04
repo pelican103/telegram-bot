@@ -952,6 +952,7 @@ function formatAssignmentPreview(assignment) {
 
 async function confirmPostAssignment(bot, chatId, userSessions, Assignment, channelId, botUsername) {
   try {
+    console.log('Channel ID being used:', channelId);
     const assignmentData = userSessions[chatId].assignmentData;
     
     // Create assignment in database
