@@ -569,12 +569,15 @@ const ITEMS_PER_PAGE = 5;
 
 // Safe send function with enhanced logging
 function safeSend(bot, chatId, text, options = {}) {
-  console.log(`📤 Sending to ${chatId}:`, text.substring(0, 80));
+  // Convert text to string if it's not already
+  const messageText = String(text);
+  
+  console.log(`📤 Sending to ${chatId}:`, messageText.substring(0, 80));
   if (options?.reply_markup) {
     console.log(`📦 Reply markup:`, JSON.stringify(options.reply_markup, null, 2));
   }
   
-  return bot.sendMessage(chatId, text, options)
+  return bot.sendMessage(chatId, messageText, options)
     .then(result => {
       console.log(`✅ Message sent successfully to ${chatId}`);
       return result;
