@@ -66,34 +66,62 @@ function getTick(value) {
 // Format functions
 function formatTutorProfile(tutor) {
   let profile = `*📋 Your Profile*\n\n`;
+  
+  // Personal Information
+  profile += `*👤 Personal Information*\n`;
   profile += `*Name:* ${tutor.fullName || 'Not set'}\n`;
   profile += `*Contact:* ${tutor.contactNumber || 'Not set'}\n`;
   profile += `*Email:* ${tutor.email || 'Not set'}\n`;
   profile += `*Gender:* ${tutor.gender || 'Not set'}\n`;
+  profile += `*Age:* ${tutor.age || 'Not set'}\n`;
   profile += `*Race:* ${tutor.race || 'Not set'}\n`;
-  profile += `*Education:* ${tutor.highestEducation || 'Not set'}\n`;
-
-  // Teaching levels summary
+  profile += `*Nationality:* ${tutor.nationality || 'Not set'}\n`;
+  if (tutor.nationality === 'Other' && tutor.nationalityOther) {
+    profile += `*Other Nationality:* ${tutor.nationalityOther}\n`;
+  }
+  profile += `*NRIC (Last 4):* ${tutor.nricLast4 ? '****' + tutor.nricLast4 : 'Not set'}\n`;
+  
+  // Date of Birth
+  if (tutor.dob) {
+    const dob = tutor.dob;
+    const dobStr = [dob.day, dob.month, dob.year].filter(Boolean).join('/');
+    profile += `*Date of Birth:* ${dobStr || 'Not set'}\n`;
+  } else {
+    profile += `*Date of Birth:* Not set\n`;
+  }
+  
+  // Education & Experience
+  profile += `\n*🎓 Education & Experience*\n`;
+  profile += `*Highest Education:* ${tutor.highestEducation || 'Not set'}\n`;
+  profile += `*Current School:* ${tutor.currentSchool || 'Not set'}\n`;
+  profile += `*Previous Schools:* ${tutor.previousSchools || 'Not set'}\n`;
+  profile += `*Tutor Type:* ${tutor.tutorType || 'Not set'}\n`;
+  profile += `*Years of Experience:* ${tutor.yearsOfExperience || 'Not set'}\n`;
+  
+  // Teaching Levels
   if (tutor.teachingLevels) {
+    profile += `\n*📚 Teaching Levels*\n`;
     const levels = [];
     if (Object.values(tutor.teachingLevels.primary || {}).some(v => v)) levels.push('Primary');
     if (Object.values(tutor.teachingLevels.secondary || {}).some(v => v)) levels.push('Secondary');
     if (Object.values(tutor.teachingLevels.jc || {}).some(v => v)) levels.push('JC');
     if (Object.values(tutor.teachingLevels.international || {}).some(v => v)) levels.push('International');
-    profile += `*Teaching Levels:* ${levels.length ? levels.join(', ') : 'Not set'}\n`;
+    profile += `*Levels:* ${levels.length ? levels.join(', ') : 'Not set'}\n`;
   }
 
-  // Locations summary
+  // Locations
   if (tutor.locations) {
+    profile += `\n*📍 Teaching Locations*\n`;
     const locations = [];
     Object.entries(tutor.locations).forEach(([key, value]) => {
       if (value) locations.push(key.charAt(0).toUpperCase() + key.slice(1));
     });
-    profile += `*Locations:* ${locations.length ? locations.join(', ') : 'Not set'}\n`;
+    profile += `*Areas:* ${locations.length ? locations.join(', ') : 'Not set'}\n`;
   }
 
-  // Availability summary
+  // Availability
   if (tutor.availableTimeSlots) {
+    profile += `\n*⏰ Availability*\n`;
     const slots = [];
     Object.entries(tutor.availableTimeSlots).forEach(([key, value]) => {
       if (value) {
@@ -101,8 +129,24 @@ function formatTutorProfile(tutor) {
         slots.push(formatted.charAt(0).toUpperCase() + formatted.slice(1));
       }
     });
-    profile += `*Availability:* ${slots.length ? slots.join(', ') : 'Not set'}\n`;
+    profile += `*Time Slots:* ${slots.length ? slots.join(', ') : 'Not set'}\n`;
   }
+
+  // Hourly Rates
+  if (tutor.hourlyRate) {
+    profile += `\n*💰 Hourly Rates*\n`;
+    const rates = [];
+    if (tutor.hourlyRate.primary) rates.push(`Primary: $${tutor.hourlyRate.primary}`);
+    if (tutor.hourlyRate.secondary) rates.push(`Secondary: $${tutor.hourlyRate.secondary}`);
+    if (tutor.hourlyRate.jc) rates.push(`JC: $${tutor.hourlyRate.jc}`);
+    if (tutor.hourlyRate.international) rates.push(`International: $${tutor.hourlyRate.international}`);
+    profile += `*Rates:* ${rates.length ? rates.join('\n') : 'Not set'}\n`;
+  }
+
+  // Introduction & Experience
+  profile += `\n*📝 Profile Details*\n`;
+  profile += `*Introduction:* ${tutor.introduction || 'Not set'}\n`;
+  profile += `*Teaching Experience:* ${tutor.teachingExperience || 'Not set'}\n`;
 
   return profile;
 }
@@ -614,7 +658,7 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
       console.log('✅ Verified user:', tutor.fullName || tutor.contactNumber);
       
     } else {
-      await safeSend(bot, chatId, '❌ Sorry, your phone number is not registered in our system. Please contact admin for access.', {
+      await safeSend(bot, chatId, '❌ Sorry, your phone number is not registered in our system. Please register yourself at www.lioncitytutors.com/register-tutor or contact LionCity admin @ivanfang for access.', {
         reply_markup: { remove_keyboard: true }
       });
       
@@ -774,7 +818,7 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         assignmentData.title = text.trim();
         session.currentStep = 'level';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 2 of 9: Enter the education level\n\n*Examples:* Primary 6, Secondary 1 NA, JC 2, University, etc.', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 2 of 7: Enter the education level\n\n*Examples:* Primary 6, Secondary 1 NA, JC 2, University, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -783,10 +827,10 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'level':
-        assignmentData.level = validateLevel(text.trim());
+        assignmentData.level = text.trim();
         session.currentStep = 'subject';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 3 of 9: Enter the subject(s)\n\n*Examples:* Mathematics, English, Science, Physics & Chemistry, etc.', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 3 of 7: Enter the subject(s)\n\n*Examples:* Mathematics, English, Science, Physics & Chemistry, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -798,7 +842,7 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         assignmentData.subject = text.trim();
         session.currentStep = 'location';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 4 of 9: Enter the location\n\n*Examples:* Tampines, Online, Tutor\'s place (Jurong), etc.', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 4 of 7: Enter the location\n\n*Examples:* Tampines, Online, Tutor\'s place (Jurong), etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -810,7 +854,7 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         assignmentData.location = text.trim();
         session.currentStep = 'rate';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 5 of 9: Enter the hourly rate\n\n*Examples:* 30, 45, 60, etc. (numbers only)', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 5 of 7: Enter the rate\n\n*Examples:* 55-75/hr, 40/hr, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -819,17 +863,10 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'rate':
-        const rateText = text.trim();
-        // Try to extract number from text
-        const rateMatch = rateText.match(/\d+/);
-        if (!rateMatch) {
-          await safeSend(bot, chatId, '❌ Please enter a valid rate (must contain numbers)\n\n*Examples:* 30, 45, 60');
-          return;
-        }
-        assignmentData.rate = rateMatch[0];
+        assignmentData.rate = text.trim();
         session.currentStep = 'frequency';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 6 of 9: Enter the frequency\n\n*Examples:* Once a week, Twice a week, 3 times a week, Daily, Flexible, etc.', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 6 of 7: Enter the frequency\n\n*Examples:* Once a week, Twice a week, 3 times a week, Daily, Flexible, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -838,22 +875,10 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'frequency':
-        assignmentData.frequency = validateFrequency(text.trim());
-        session.currentStep = 'duration';
-        
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 7 of 9: Enter the session duration\n\n*Examples:* 1.5 hours, 2 hours, 90 minutes, etc.', {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
-          }
-        });
-        break;
-      
-      case 'duration':
-        assignmentData.duration = text.trim();
+        assignmentData.frequency = text.trim();
         session.currentStep = 'startDate';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 8 of 9: Enter the start date\n\n*Examples:* ASAP, today, tomorrow, next Monday, 15 Dec 2024, etc.', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 7 of 7: Enter the start date\n\n*Examples:* ASAP, today, tomorrow, next Monday, 15 Dec 2024, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -862,16 +887,10 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         break;
       
       case 'startDate':
-        const parsedDate = parseNaturalDate(text.trim());
-        if (parsedDate instanceof Date && !isNaN(parsedDate.getTime())) {
-          assignmentData.startDate = parsedDate;
-        } else {
-          // Store as text if parsing fails (for flexible dates like "ASAP")
-          assignmentData.startDate = text.trim();
-        }
+        assignmentData.startDate = text.trim();
         session.currentStep = 'description';
         
-        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nStep 9 of 9: Enter additional description or requirements\n\n*Type "skip" to leave empty*\n\n*Examples:* Looking for experienced female tutor, Student needs help with exam prep, etc.', {
+        await safeSend(bot, chatId, '🎯 *Creating New Assignment*\n\nFinal Step: Enter additional description or requirements\n\n*Type "skip" to leave empty*\n\n*Examples:* Looking for MOE/Ex-MOE tutor, Student needs help with exam prep, etc.', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'admin_panel' }]]
@@ -886,8 +905,6 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
         
         // Set default values
         assignmentData.status = 'Open';
-        assignmentData.studentCount = 1;
-        assignmentData.rateType = 'hour';
         assignmentData.createdAt = new Date();
         assignmentData.updatedAt = new Date();
         
@@ -914,22 +931,15 @@ async function handleAssignmentStep(bot, chatId, text, userSessions) {
   }
 }
 
+// Update formatAssignmentPreview to match the simplified schema
 function formatAssignmentPreview(assignment) {
   let msg = `*🎯 ${assignment.title}*\n\n`;
   msg += `*📚 Level:* ${assignment.level}\n`;
   msg += `*📖 Subject:* ${assignment.subject}\n`;
   msg += `*📍 Location:* ${assignment.location}\n`;
-  msg += `*💰 Rate:* $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
-  msg += `*👥 Students:* ${assignment.studentCount || 1}\n`;
+  msg += `*💰 Rate:* ${assignment.rate}\n`;
   msg += `*📅 Frequency:* ${assignment.frequency}\n`;
-  msg += `*⏱️ Duration:* ${assignment.duration}\n`;
-  
-  // Handle different start date formats
-  if (assignment.startDate instanceof Date) {
-    msg += `*🚀 Start Date:* ${assignment.startDate.toLocaleDateString('en-SG')}\n`;
-  } else {
-    msg += `*🚀 Start Date:* ${assignment.startDate}\n`;
-  }
+  msg += `*🚀 Start Date:* ${assignment.startDate}\n`;
   
   if (assignment.description) {
     msg += `\n*📝 Description:* ${assignment.description}\n`;
