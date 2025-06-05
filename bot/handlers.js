@@ -665,8 +665,32 @@ async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, 
     // Check if there's a pending assignment application
     if (userSessions[chatId].pendingAssignmentId) {
       const assignmentId = userSessions[chatId].pendingAssignmentId;
-      delete userSessions[chatId].pendingAssignmentId; // Clear the pending assignment
-      return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
+      const assignment = await Assignment.findById(assignmentId);
+      
+      if (!assignment) {
+        delete userSessions[chatId].pendingAssignmentId;
+        return await safeSend(bot, chatId, '❌ This assignment is no longer available.');
+      }
+      
+      // Show profile preview with application options
+      const profileMsg = formatTutorProfile(tutor);
+      const assignmentMsg = formatAssignment(assignment);
+      
+      await safeSend(bot, chatId, 
+        `📋 *Profile Preview*\n\n${profileMsg}\n\n` +
+        `🎯 *Assignment Details*\n\n${assignmentMsg}\n\n` +
+        `Please review your profile and the assignment details above. Would you like to update your profile or proceed with the application?`, 
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📝 Update Profile', callback_data: 'profile_edit' }],
+              [{ text: '✅ Confirm Application', callback_data: `confirm_apply_${assignmentId}` }]
+            ]
+          }
+        }
+      );
+      return;
     }
     
     // If there was a start parameter, handle it
@@ -1733,18 +1757,17 @@ async function handleCallbackQuery(
       return await showMainMenu(chatId, bot, userId, ADMIN_USERS);
     }
 
+    // Handle application confirmation
+    if (data.startsWith('confirm_apply_')) {
+      const assignmentId = data.replace('confirm_apply_', '');
+      return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
+    }
+
     if (data === 'admin_panel') {
       if (!isAdmin(userId, ADMIN_USERS)) {
         return await safeSend(bot, chatId, 'You are not authorized to access the admin panel.');
       }
       return await showAdminPanel(chatId, bot);
-    }
-
-    if (data === 'confirm_post_assignment') {
-      if (!isAdmin(userId, ADMIN_USERS)) {
-        return await safeSend(bot, chatId, 'You are not authorized to post assignments.');
-      }
-      return await confirmPostAssignment(bot, chatId, userSessions, Assignment, CHANNEL_ID, BOT_USERNAME);
     }
 
     if (data.trim() === 'admin_post_assignment') {
@@ -1770,11 +1793,6 @@ async function handleCallbackQuery(
 
     if (data === 'admin_manage_assignments') {
       return await adminManageAssignments(bot, chatId, Assignment);
-    }
-
-    if (data.startsWith('apply_')) {
-      const assignmentId = data.replace('apply_', '');
-      return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
     }
 
     // Profile editing handlers
