@@ -170,12 +170,11 @@ function formatAssignment(assignment) {
 
 // Format assignment for channel posting
 function formatAssignmentForChannel(assignment, botUsername) {
-  let msg = `🎯 *NEW TUTORING ASSIGNMENT*\n\n`;
+  let msg = `🎯 *Title:* ${assignment.title}\n\n`;
   msg += `📚 *Level:* ${assignment.level}\n`;
   msg += `📖 *Subject:* ${assignment.subject}\n`;
   msg += `📍 *Location:* ${assignment.location}\n`;
   msg += `💰 *Rate:* $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
-  msg += `👥 *Students:* ${assignment.studentCount || 1}\n`;
   msg += `📅 *Frequency:* ${assignment.frequency}\n`;
   msg += `🚀 *Start Date:* ${assignment.startDate}\n`;
   
