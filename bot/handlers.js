@@ -630,7 +630,7 @@ async function handleStart(bot, chatId, userId, Tutor, userSessions, startParam 
 }
 
 // Handle contact sharing
-async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, ADMIN_USERS) {
+async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, ADMIN_USERS, Assignment) {
   try {
     // Normalize phone number
     const phoneVariations = normalizePhone(contact.phone_number);
@@ -2333,7 +2333,7 @@ async function handleMessage(bot, chatId, userId, text, message, Tutor, Assignme
   if (!text || typeof text !== 'string') {
     // Handle contact sharing - delegate to your existing handleContact function
     if (message.contact) {
-      return await handleContact(bot, chatId, userId, message.contact, Tutor, userSessions, ADMIN_USERS);
+      return await handleContact(bot, chatId, userId, message.contact, Tutor, userSessions, ADMIN_USERS, Assignment);
     }
     
     // For other non-text messages, show main menu or prompt for contact if needed
