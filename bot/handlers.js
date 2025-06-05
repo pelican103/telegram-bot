@@ -595,6 +595,22 @@ function isAdmin(userId, ADMIN_USERS) {
 // Handle initial start and contact sharing
 async function handleStart(bot, chatId, userId, Tutor, userSessions, startParam = null, Assignment, ADMIN_USERS, BOT_USERNAME) {
   try {
+    // Store startParam in session if it's an application
+    if (startParam && startParam.startsWith('apply_')) {
+      userSessions[chatId] = { 
+        state: 'awaiting_contact',
+        startParam: startParam,
+        userId: userId,
+        pendingAssignmentId: startParam.replace('apply_', '') // Store the assignment ID
+      };
+    } else {
+      userSessions[chatId] = { 
+        state: 'awaiting_contact',
+        startParam: startParam,
+        userId: userId
+      };
+    }
+    
     // Always request contact number first - this is your primary verification method
     await safeSend(bot, chatId, '👋 Welcome! To get started, please share your contact number by clicking the button below.', {
       reply_markup: {
@@ -607,13 +623,6 @@ async function handleStart(bot, chatId, userId, Tutor, userSessions, startParam 
       }
     });
     
-    // Set state to waiting for contact
-    userSessions[chatId] = { 
-      state: 'awaiting_contact',
-      startParam: startParam,
-      userId: userId // Store for later use
-    };
-    
   } catch (error) {
     console.error('Error handling start:', error);
     await safeSend(bot, chatId, 'There was an error setting up your account. Please try again.');
@@ -623,61 +632,47 @@ async function handleStart(bot, chatId, userId, Tutor, userSessions, startParam 
 // Handle contact sharing
 async function handleContact(bot, chatId, userId, contact, Tutor, userSessions, ADMIN_USERS) {
   try {
-    const phoneNumber = contact.phone_number;
+    // Normalize phone number
+    const phoneVariations = normalizePhone(contact.phone_number);
     
-    // Extract last 8 digits for Singapore numbers
-    const last8Digits = phoneNumber.replace(/\D/g, '').slice(-8);
+    // Find or create tutor
+    let tutor = await Tutor.findOne({ contactNumber: { $in: phoneVariations } });
     
-    // Create variations to search for
-    const phoneVariations = [
-      last8Digits,
-      `+65${last8Digits}`,
-      `65${last8Digits}`,
-      phoneNumber
-    ];
-    
-    console.log('🔍 Searching for phone variations:', phoneVariations);
-    
-    // Find existing tutor by phone number variations
-    let tutor = await Tutor.findOne({
-      contactNumber: { $in: phoneVariations }
-    });
-    
-    if (tutor) {
-      tutor.chatId = chatId;
-      tutor.userId = userId;
-      if (!tutor.fullName && contact.first_name) {
-        tutor.fullName = contact.first_name + (contact.last_name ? ' ' + contact.last_name : '');
-      }
+    if (!tutor) {
+      // Create new tutor
+      tutor = new Tutor({
+        contactNumber: phoneVariations[0], // Use the first variation as the stored number
+        fullName: contact.first_name + (contact.last_name ? ' ' + contact.last_name : ''),
+        telegramId: userId,
+        teachingLevels: initializeTeachingLevels(),
+        availableTimeSlots: initializeAvailability(),
+        locations: initializeLocations()
+      });
       await tutor.save();
-      
-      await safeSend(bot, chatId, '✅ Welcome back! Your account has been verified and linked.', {
-        reply_markup: { remove_keyboard: true }
-      });
-      
-      console.log('✅ Verified user:', tutor.fullName || tutor.contactNumber);
-      
-    } else {
-      await safeSend(bot, chatId, '❌ Sorry, your phone number is not registered in our system. Please register yourself at www.lioncitytutors.com/register-tutor or contact LionCity admin @ivanfang for access.', {
-        reply_markup: { remove_keyboard: true }
-      });
-      
-      console.log('❌ Unverified phone number:', last8Digits);
-      return; // Stop here - don't create account
+    } else if (tutor.telegramId !== userId) {
+      // Update telegram ID if it changed
+      tutor.telegramId = userId;
+      await tutor.save();
     }
     
-    // Set up session
-    userSessions[chatId] = { 
-      tutorId: tutor._id, 
-      contactNumber: tutor.contactNumber,
-      verified: true
+    // Store tutor ID in session
+    userSessions[chatId] = {
+      ...userSessions[chatId],
+      tutorId: tutor._id,
+      state: 'idle'
     };
     
-    // Handle start parameter if exists
-    const startParam = userSessions[chatId].startParam;
-    if (startParam) {
+    // Check if there's a pending assignment application
+    if (userSessions[chatId].pendingAssignmentId) {
+      const assignmentId = userSessions[chatId].pendingAssignmentId;
+      delete userSessions[chatId].pendingAssignmentId; // Clear the pending assignment
+      return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
+    }
+    
+    // If there was a start parameter, handle it
+    if (userSessions[chatId].startParam) {
       delete userSessions[chatId].startParam;
-      await handleStartParameter(bot, chatId, userId, startParam, Assignment, Tutor, userSessions, ADMIN_USERS);
+      await handleStartParameter(bot, chatId, userId, userSessions[chatId].startParam, Assignment, Tutor, userSessions, ADMIN_USERS);
       return;
     }
     
@@ -1072,13 +1067,8 @@ async function handleApplication(bot, chatId, userId, assignmentId, Assignment, 
 // Handle start parameters (for assignment applications)
 async function handleStartParameter(bot, chatId, userId, startParam, Assignment, Tutor, userSessions, ADMIN_USERS) {
   try {
-    if (startParam.startsWith('apply_')) {
-      const assignmentId = startParam.replace('apply_', '');
-      await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
-    } else {
-      // Show main menu for unknown parameters
-      await showMainMenu(chatId, bot, userId, ADMIN_USERS);
-    }
+    // Show main menu for unknown parameters
+    await showMainMenu(chatId, bot, userId, ADMIN_USERS);
   } catch (error) {
     console.error('Error handling start parameter:', error);
     await safeSend(bot, chatId, '❌ An error occurred. Please try again.');
