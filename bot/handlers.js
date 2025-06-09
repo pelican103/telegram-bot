@@ -1102,64 +1102,59 @@ async function handleStartParameter(bot, chatId, userId, startParam, Assignment,
 // View assignments with pagination
 async function viewAssignments(bot, chatId, page = 0, Assignment) {
   try {
-    const totalAssignments = await Assignment.countDocuments({ status: 'Open' });
     const assignments = await Assignment.find({ status: 'Open' })
+      .sort({ createdAt: -1 })
       .skip(page * ITEMS_PER_PAGE)
-      .limit(ITEMS_PER_PAGE)
-      .sort({ createdAt: -1 });
-    
-    if (assignments.length === 0) {
-      await safeSend(bot, chatId, '📋 No assignments available at the moment. Check back later!', {
+      .limit(ITEMS_PER_PAGE);
+
+    if (!assignments || assignments.length === 0) {
+      await safeSend(bot, chatId, '📋 No assignments available at the moment.', {
         reply_markup: {
           inline_keyboard: [[{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]]
         }
       });
       return;
     }
-    
-    // Create pagination buttons
+
+    let message = `📋 *Available Assignments*\n\n`;
     const buttons = [];
-    const totalPages = Math.ceil(totalAssignments / ITEMS_PER_PAGE);
-    
-    if (totalPages > 1) {
-      const paginationRow = [];
-      if (page > 0) {
-        paginationRow.push({ text: '⬅️ Previous', callback_data: `assignments_page_${page - 1}` });
-      }
-      if (page < totalPages - 1) {
-        paginationRow.push({ text: 'Next ➡️', callback_data: `assignments_page_${page + 1}` });
-      }
-      if (paginationRow.length > 0) {
-        buttons.push(paginationRow);
-      }
-    }
-    
-    buttons.push([{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]);
-    
-    // Format assignments message
-    let message = `📋 *Available Assignments* (Page ${page + 1}/${totalPages})\n\n`;
-    
+
     assignments.forEach((assignment, index) => {
-      const assignmentNum = page * ITEMS_PER_PAGE + index + 1;
-      message += `*${assignmentNum}. ${assignment.title || 'Assignment'}*\n`;
+      message += `*${index + 1}. ${assignment.title || 'Assignment'}*\n`;
       message += `📚 Level: ${assignment.level}\n`;
       message += `📖 Subject: ${assignment.subject}\n`;
       message += `📍 Location: ${assignment.location}\n`;
-      message += `💰 Rate: ${assignment.rate}\n`;
+      message += `💰 Rate: $${assignment.rate}/${assignment.rateType || 'hour'}\n`;
       message += `📅 Frequency: ${assignment.frequency}\n`;
-      message += `🚀 Start: ${assignment.startDate}\n`;
-      
-      // Add apply button for each assignment
-      buttons.splice(-1, 0, [{ text: `📝 Apply for Assignment ${assignmentNum}`, callback_data: `apply_${assignment._id}` }]);
-      
-      message += '\n';
+      message += `🚀 Start Date: ${assignment.startDate}\n\n`;
+
+      buttons.push([{ text: `📝 Apply for Assignment ${index + 1}`, callback_data: `apply_assignment_${assignment._id}` }]);
     });
-    
+
+    // Add pagination buttons if needed
+    const totalAssignments = await Assignment.countDocuments({ status: 'Open' });
+    const totalPages = Math.ceil(totalAssignments / ITEMS_PER_PAGE);
+
+    if (totalPages > 1) {
+      const paginationButtons = [];
+      if (page > 0) {
+        paginationButtons.push({ text: '⬅️ Previous', callback_data: `assignments_page_${page - 1}` });
+      }
+      if (page < totalPages - 1) {
+        paginationButtons.push({ text: 'Next ➡️', callback_data: `assignments_page_${page + 1}` });
+      }
+      if (paginationButtons.length > 0) {
+        buttons.push(paginationButtons);
+      }
+    }
+
+    buttons.push([{ text: '🏠 Back to Main Menu', callback_data: 'main_menu' }]);
+
     await safeSend(bot, chatId, message, {
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: buttons }
     });
-    
+
   } catch (error) {
     console.error('Error viewing assignments:', error);
     await safeSend(bot, chatId, '❌ An error occurred while loading assignments. Please try again.');
@@ -1759,6 +1754,12 @@ async function handleCallbackQuery(
     // Handle application confirmation
     if (data.startsWith('confirm_apply_')) {
       const assignmentId = data.replace('confirm_apply_', '');
+      return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
+    }
+
+    // Handle direct assignment application
+    if (data.startsWith('apply_assignment_')) {
+      const assignmentId = data.replace('apply_assignment_', '');
       return await handleApplication(bot, chatId, userId, assignmentId, Assignment, Tutor, userSessions);
     }
 
