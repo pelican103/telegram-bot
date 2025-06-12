@@ -2310,6 +2310,39 @@ async function handleCallbackQuery(
       });
     }
 
+    if (data.startsWith('edit_assignment_')) {
+      const assignmentId = data.replace('edit_assignment_', '');
+      await editAssignment(bot, chatId, assignmentId, Assignment);
+    }
+    
+    if (data.startsWith('toggle_status_')) {
+      const assignmentId = data.replace('toggle_status_', '');
+      await toggleAssignmentStatus(bot, chatId, assignmentId, Assignment);
+    }
+    
+    if (data.startsWith('delete_assignment_')) {
+      const assignmentId = data.replace('delete_assignment_', '');
+      // Add confirmation dialog
+      await safeSend(bot, chatId, '⚠️ Are you sure you want to delete this assignment? This action cannot be undone.', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '✅ Yes, Delete', callback_data: `confirm_delete_${assignmentId}` }],
+            [{ text: '❌ Cancel', callback_data: `edit_assignment_${assignmentId}` }]
+          ]
+        }
+      });
+    }
+    
+    if (data.startsWith('confirm_delete_')) {
+      const assignmentId = data.replace('confirm_delete_', '');
+      await deleteAssignment(bot, chatId, assignmentId, Assignment);
+    }
+    
+    if (data.startsWith('view_applications_')) {
+      const assignmentId = data.replace('view_applications_', '');
+      await viewAssignmentApplications(bot, chatId, assignmentId, Assignment);
+    }
+
     // Subject toggle handlers
     const toggleCategories = ['primary', 'secondary', 'jc', 'international'];
     for (const cat of toggleCategories) {
@@ -2563,6 +2596,144 @@ async function adminManageAssignments(bot, chatId, Assignment) {
   }
 }
 
+async function editAssignment(bot, chatId, assignmentId, Assignment) {
+  try {
+    const assignment = await Assignment.findById(assignmentId);
+    
+    if (!assignment) {
+      await safeSend(bot, chatId, '❌ Assignment not found.', {
+        reply_markup: {
+          inline_keyboard: [[{ text: '🔙 Back to Manage Assignments', callback_data: 'admin_manage_assignments' }]]
+        }
+      });
+      return;
+    }
+    
+    let message = `✏️ *Edit Assignment*\n\n`;
+    message += `*Title:* ${assignment.title || 'Assignment'}\n`;
+    message += `*Level:* ${assignment.level}\n`;
+    message += `*Subject:* ${assignment.subject}\n`;
+    message += `*Current Status:* ${assignment.status}\n`;
+    message += `*Applications:* ${assignment.applicants ? assignment.applicants.length : 0}\n\n`;
+    message += `What would you like to do?`;
+    
+    const buttons = [
+      [{ text: assignment.status === 'Open' ? '🔒 Close Assignment' : '🔓 Open Assignment', 
+         callback_data: `toggle_status_${assignmentId}` }],
+      [{ text: '🗑️ Delete Assignment', callback_data: `delete_assignment_${assignmentId}` }],
+      [{ text: '👥 View Applications', callback_data: `view_applications_${assignmentId}` }],
+      [{ text: '🔙 Back to Manage Assignments', callback_data: 'admin_manage_assignments' }]
+    ];
+    
+    await safeSend(bot, chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: buttons }
+    });
+    
+  } catch (error) {
+    console.error('Error editing assignment:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while loading assignment details. Please try again.');
+  }
+}
+
+// Function to toggle assignment status
+async function toggleAssignmentStatus(bot, chatId, assignmentId, Assignment) {
+  try {
+    const assignment = await Assignment.findById(assignmentId);
+    
+    if (!assignment) {
+      await safeSend(bot, chatId, '❌ Assignment not found.');
+      return;
+    }
+    
+    const newStatus = assignment.status === 'Open' ? 'Closed' : 'Open';
+    await Assignment.findByIdAndUpdate(assignmentId, { status: newStatus });
+    
+    const statusEmoji = newStatus === 'Open' ? '🔓' : '🔒';
+    await safeSend(bot, chatId, `${statusEmoji} Assignment status changed to *${newStatus}*`, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '✏️ Edit Again', callback_data: `edit_assignment_${assignmentId}` }],
+          [{ text: '🔙 Back to Manage Assignments', callback_data: 'admin_manage_assignments' }]
+        ]
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error toggling assignment status:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while updating assignment status. Please try again.');
+  }
+}
+
+// Function to delete assignment
+async function deleteAssignment(bot, chatId, assignmentId, Assignment) {
+  try {
+    const assignment = await Assignment.findById(assignmentId);
+    
+    if (!assignment) {
+      await safeSend(bot, chatId, '❌ Assignment not found.');
+      return;
+    }
+    
+    await Assignment.findByIdAndDelete(assignmentId);
+    
+    await safeSend(bot, chatId, `🗑️ Assignment "*${assignment.title || 'Assignment'}*" has been deleted.`, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🔙 Back to Manage Assignments', callback_data: 'admin_manage_assignments' }]]
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error deleting assignment:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while deleting assignment. Please try again.');
+  }
+}
+
+// Function to view applications for an assignment
+async function viewAssignmentApplications(bot, chatId, assignmentId, Assignment) {
+  try {
+    const assignment = await Assignment.findById(assignmentId).populate('applicants.userId', 'firstName lastName username');
+    
+    if (!assignment) {
+      await safeSend(bot, chatId, '❌ Assignment not found.');
+      return;
+    }
+    
+    if (!assignment.applicants || assignment.applicants.length === 0) {
+      await safeSend(bot, chatId, `📋 No applications found for "*${assignment.title || 'Assignment'}*"`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[{ text: '🔙 Back to Edit Assignment', callback_data: `edit_assignment_${assignmentId}` }]]
+        }
+      });
+      return;
+    }
+    
+    let message = `👥 *Applications for: ${assignment.title || 'Assignment'}*\n\n`;
+    
+    assignment.applicants.forEach((applicant, index) => {
+      const user = applicant.userId;
+      message += `*${index + 1}. ${user.firstName} ${user.lastName}*\n`;
+      message += `@${user.username || 'N/A'}\n`;
+      message += `📅 Applied: ${new Date(applicant.appliedAt).toLocaleDateString()}\n`;
+      message += `💰 Proposed Rate: $${applicant.proposedRate || 'N/A'}\n\n`;
+    });
+    
+    await safeSend(bot, chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [[{ text: '🔙 Back to Edit Assignment', callback_data: `edit_assignment_${assignmentId}` }]]
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error viewing assignment applications:', error);
+    await safeSend(bot, chatId, '❌ An error occurred while loading applications. Please try again.');
+  }
+}
+
 // Export all functions (ES modules)
 export {
   // Utility functions
@@ -2599,6 +2770,10 @@ export {
   getDOBMenu,
   getHourlyRatesMenu,
   getTutorTypeMenu,
+  editAssignment,
+  toggleAssignmentStatus,
+  deleteAssignment,
+  viewAssignmentApplications,
   
   // Core handler functions
   safeSend,
