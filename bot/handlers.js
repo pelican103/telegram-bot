@@ -2312,18 +2312,18 @@ async function handleCallbackQuery(
 
     if (data.startsWith('edit_assignment_')) {
       const assignmentId = data.replace('edit_assignment_', '');
-      await editAssignment(bot, chatId, assignmentId, Assignment);
+      return await editAssignment(bot, chatId, assignmentId, Assignment);
     }
     
     if (data.startsWith('toggle_status_')) {
       const assignmentId = data.replace('toggle_status_', '');
-      await toggleAssignmentStatus(bot, chatId, assignmentId, Assignment);
+      return await toggleAssignmentStatus(bot, chatId, assignmentId, Assignment);
     }
     
     if (data.startsWith('delete_assignment_')) {
       const assignmentId = data.replace('delete_assignment_', '');
       // Add confirmation dialog
-      await safeSend(bot, chatId, '⚠️ Are you sure you want to delete this assignment? This action cannot be undone.', {
+      return await safeSend(bot, chatId, '⚠️ Are you sure you want to delete this assignment? This action cannot be undone.', {
         reply_markup: {
           inline_keyboard: [
             [{ text: '✅ Yes, Delete', callback_data: `confirm_delete_${assignmentId}` }],
@@ -2335,12 +2335,12 @@ async function handleCallbackQuery(
     
     if (data.startsWith('confirm_delete_')) {
       const assignmentId = data.replace('confirm_delete_', '');
-      await deleteAssignment(bot, chatId, assignmentId, Assignment);
+      return await deleteAssignment(bot, chatId, assignmentId, Assignment);
     }
     
     if (data.startsWith('view_applications_')) {
       const assignmentId = data.replace('view_applications_', '');
-      await viewAssignmentApplications(bot, chatId, assignmentId, Assignment);
+      return await viewAssignmentApplications(bot, chatId, assignmentId, Assignment);
     }
 
     // Subject toggle handlers
